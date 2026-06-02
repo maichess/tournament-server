@@ -9,7 +9,7 @@ import nowchess.tournament.service.*
 
 object Main extends ZIOAppDefault:
 
-  private val config = AppConfig()
+  private val config = AppConfig.fromEnv(sys.env)
 
   private val allRoutes =
     TournamentRoutes.routes ++
