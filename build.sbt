@@ -21,4 +21,15 @@ lazy val root = (project in file("."))
     coverageMinimumStmtTotal := 100,
     coverageFailOnMinimum    := true,
     coverageExcludedFiles    := ".*Main.*",
+
+    assembly / assemblyJarName := "app.jar",
+    assembly / test            := {},
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
+      case PathList("META-INF", "native-image", xs @ _*) => MergeStrategy.discard
+      case PathList("META-INF", _*)                  => MergeStrategy.discard
+      case PathList("module-info.class")             => MergeStrategy.discard
+      case "reference.conf"                          => MergeStrategy.concat
+      case _                                         => MergeStrategy.first
+    },
   )
