@@ -2,13 +2,14 @@ package nowchess.tournament.service
 
 import zio.*
 import nowchess.tournament.domain.model.{BotId, UserId}
+import nowchess.tournament.persistence.{Identity, IdentityRepository}
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.util.Base64
+import java.util.{Base64, UUID}
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-final class JwtAuthService(secret: String) extends AuthService:
+final class JwtAuthService(secret: String, identityRepo: IdentityRepository) extends AuthService:
   private val decoder = Base64.getUrlDecoder
   private val encoder = Base64.getUrlEncoder.withoutPadding
 
@@ -31,6 +32,25 @@ final class JwtAuthService(secret: String) extends AuthService:
         isBot = isBot,
       )
 
+  override def register(name: String, isBot: Boolean): Task[RegisterResult] =
+    for
+      existing <- identityRepo.findByName(name, isBot)
+      identity <- existing match
+        case Some(id) => ZIO.succeed(id)
+        case None =>
+          val prefix = if isBot then "bot_" else "usr_"
+          val id = Identity(prefix + UUID.randomUUID().toString.take(8), name, isBot)
+          identityRepo.save(id).as(id)
+      token = createToken(identity.id, identity.isBot)
+    yield RegisterResult(identity.id, token)
+
+  def createToken(sub: String, isBot: Boolean): String =
+    val header = encoder.encodeToString("""{"alg":"HS256"}""".getBytes(StandardCharsets.UTF_8))
+    val isBotStr = if isBot then "true" else "false"
+    val payload = encoder.encodeToString(s"""{"sub":"$sub","isBot":$isBotStr}""".getBytes(StandardCharsets.UTF_8))
+    val signature = encoder.encodeToString(hmacSha256(s"$header.$payload"))
+    s"$header.$payload.$signature"
+
   private def hmacSha256(input: String): Array[Byte] =
     val mac = Mac.getInstance("HmacSHA256")
     mac.init(SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
@@ -47,5 +67,6 @@ final class JwtAuthService(secret: String) extends AuthService:
     pattern.findFirstMatchIn(json).map(_.group(1))
 
 object JwtAuthService:
-  def layer(secret: String): ULayer[AuthService] =
-    ZLayer.succeed(JwtAuthService(secret))
+  def layer(secret: String): URLayer[IdentityRepository, AuthService] =
+    ZLayer:
+      ZIO.service[IdentityRepository].map(repo => JwtAuthService(secret, repo))

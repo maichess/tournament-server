@@ -72,4 +72,38 @@ object RepositorySpec extends ZIOSpecDefault:
         yield assertTrue(result.nonEmpty)
       },
     ),
-  ).provide(InMemoryTournamentRepository.layer ++ InMemoryGameRepository.layer) @@ TestAspect.sequential
+    suite("IdentityRepository")(
+      test("save and get"):
+        val identity = Identity("id1", "Bot1", isBot = true)
+        for
+          _ <- IdentityRepository.save(identity)
+          result <- IdentityRepository.get("id1")
+        yield assertTrue(result.contains(identity))
+      ,
+      test("get returns None for missing"):
+        for result <- IdentityRepository.get("missing")
+        yield assertTrue(result.isEmpty)
+      ,
+      test("findByName finds matching"):
+        val identity = Identity("id2", "UniqueBot", isBot = true)
+        for
+          _ <- IdentityRepository.save(identity)
+          result <- IdentityRepository.findByName("UniqueBot", isBot = true)
+        yield assertTrue(result.contains(identity))
+      ,
+      test("findByName returns None for wrong isBot"):
+        val identity = Identity("id3", "TypeTest", isBot = true)
+        for
+          _ <- IdentityRepository.save(identity)
+          result <- IdentityRepository.findByName("TypeTest", isBot = false)
+        yield assertTrue(result.isEmpty)
+      ,
+      test("findByName returns None for wrong name"):
+        val identity = Identity("id4", "NameTest", isBot = false)
+        for
+          _ <- IdentityRepository.save(identity)
+          result <- IdentityRepository.findByName("Other", isBot = false)
+        yield assertTrue(result.isEmpty)
+      ,
+    ),
+  ).provide(InMemoryTournamentRepository.layer ++ InMemoryGameRepository.layer ++ InMemoryIdentityRepository.layer) @@ TestAspect.sequential

@@ -4,7 +4,7 @@ import zio.*
 import zio.http.*
 import nowchess.tournament.config.AppConfig
 import nowchess.tournament.http.routes.*
-import nowchess.tournament.persistence.*
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, InMemoryIdentityRepository}
 import nowchess.tournament.service.*
 
 object Main extends ZIOAppDefault:
@@ -12,6 +12,7 @@ object Main extends ZIOAppDefault:
   private val config = AppConfig.fromEnv(sys.env)
 
   private val allRoutes =
+    AuthRoutes.routes ++
     TournamentRoutes.routes ++
     ParticipationRoutes.routes ++
     ResultRoutes.routes ++
@@ -23,6 +24,7 @@ object Main extends ZIOAppDefault:
       Server.defaultWithPort(config.port),
       InMemoryTournamentRepository.layer,
       InMemoryGameRepository.layer,
+      InMemoryIdentityRepository.layer,
       TournamentServiceLive.layer,
       GameServiceLive.layer,
       StreamServiceLive.layer,

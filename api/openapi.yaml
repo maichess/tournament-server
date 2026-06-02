@@ -43,6 +43,8 @@ security:
   - bearerAuth: []
 
 tags:
+  - name: Auth
+    description: Identity registration and token issuance
   - name: Tournament
     description: Tournament lifecycle
   - name: Participation
@@ -55,6 +57,34 @@ tags:
     description: In-game move submission and state
 
 paths:
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new identity
+      description: |
+        Registers a user or bot identity and returns a JWT. No password
+        required — identity is for attribution, not security.
+
+        The returned token is used as a Bearer token on all authenticated
+        endpoints. The `sub` claim contains the assigned ID; `isBot` is
+        set according to the request.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Identity registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/tournament:
     get:
@@ -443,6 +473,31 @@ components:
       example: j0nPtcjl
 
   schemas:
+
+    RegisterRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Display name for this identity
+          example: MyChessBot
+        isBot:
+          type: boolean
+          default: false
+          description: Whether this identity represents a bot (true) or a user/director (false)
+
+    RegisterResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Assigned identity ID (used as JWT subject)
+          example: usr_a1b2c3
+        token:
+          type: string
+          description: JWT bearer token for subsequent requests
+          example: eyJhbGciOiJIUzI1NiJ9...
 
     Clock:
       type: object
