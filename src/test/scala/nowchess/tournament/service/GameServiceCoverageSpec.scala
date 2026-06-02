@@ -6,7 +6,7 @@ import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.game.{GameStatus, Game, GameClock}
 import nowchess.tournament.domain.error.DomainError
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository, TournamentRepository}
 
 object GameServiceCoverageSpec extends ZIOSpecDefault:
 
@@ -20,7 +20,7 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
     StreamServiceLive.layer >>>
-    (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository])
+    (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository] ++ ZLayer.service[TournamentRepository])
 
   private def foolsMate(gsvc: GameService, gameRepo: GameRepository, gameId: GameId) =
     for
@@ -179,6 +179,51 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
         }
         result <- tsvc.get(t.id)
       yield assertTrue(result.status == TournamentStatus.Finished)
+      ).provide(testLayer)
+    },
+    test("game end with non-existent tournament fails") {
+      (for
+        gameRepo <- ZIO.service[GameRepository]
+        gsvc <- ZIO.service[GameService]
+        badGame = Game(
+          id = GameId("orphan"), tournamentId = TournamentId("nonexistent"), round = 1,
+          white = bot1, black = bot2, moves = Vector.empty,
+          status = GameStatus.Ongoing, turn = Color.White, winner = None,
+          clock = GameClock(300, 300), startPosition = StartPosition.Standard,
+          fen = StartPosition.Standard.toFen,
+        )
+        _ <- gameRepo.save(badGame)
+        _ <- gsvc.makeMove(GameId("orphan"), "f2f3", BotId("b1"))
+        _ <- gsvc.makeMove(GameId("orphan"), "e7e5", BotId("b2"))
+        _ <- gsvc.makeMove(GameId("orphan"), "g2g4", BotId("b1"))
+        result <- gsvc.makeMove(GameId("orphan"), "d8h4", BotId("b2")).exit
+      yield assertTrue(result.isFailure)
+      ).provide(testLayer)
+    },
+    test("game end with corrupted tournament round fails") {
+      val form = CreateTournamentForm(
+        name = "Corrupt", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
+        rated = true, format = TournamentFormat.Swiss,
+        startPosition = StartPosition.Standard, matchesPerPairing = 1, groupSize = None,
+      )
+      (for
+        tsvc <- ZIO.service[TournamentService]
+        gsvc <- ZIO.service[GameService]
+        gameRepo <- ZIO.service[GameRepository]
+        tournamentRepo <- ZIO.service[TournamentRepository]
+        t <- tsvc.create(form, director)
+        _ <- tsvc.join(t.id, bot1)
+        _ <- tsvc.join(t.id, bot2)
+        started <- tsvc.start(t.id, director)
+        gameId = started.rounds.head.pairings.head.matches.head.gameId
+        // Corrupt: set currentRound to 99, a round that doesn't exist
+        _ <- tournamentRepo.save(started.copy(currentRound = 99))
+        game <- gameRepo.get(gameId).map(_.get)
+        _ <- gsvc.makeMove(gameId, "f2f3", game.white.id)
+        _ <- gsvc.makeMove(gameId, "e7e5", game.black.id)
+        _ <- gsvc.makeMove(gameId, "g2g4", game.white.id)
+        result <- gsvc.makeMove(gameId, "d8h4", game.black.id).exit
+      yield assertTrue(result.isFailure)
       ).provide(testLayer)
     },
     test("makeMove on finished game fails") {

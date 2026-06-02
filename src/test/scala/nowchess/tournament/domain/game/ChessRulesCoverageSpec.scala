@@ -148,30 +148,27 @@ object ChessRulesCoverageSpec extends ZIOSpecDefault:
     ),
     suite("hasLegalMoves internal generation coverage")(
       test("checkmate position exercises pawn forward promotion generation") {
-        // White king on a1 in check from black pawn on b2. White pawn on h7 can promote but
-        // doesn't resolve check. hasLegalMoves iterates all white pieces including the pawn.
-        val fen = "4k1n1/7P/8/8/8/1p6/pp6/K7 w - - 0 1"
+        // White king on a1 in check from black pawn on b2. c3 pawn protects b2.
+        // b3 pawn protects a2. King has no escape. Pawn on h7 generates promotion moves
+        // but none resolve check. hasLegalMoves iterates all white pieces including pawn.
+        val fen = "4k1n1/7P/8/8/8/1pp5/pp6/K7 w - - 0 1"
         val board = parseFen(fen).toOption.get
         assertTrue(isCheckmate(board))
       },
       test("checkmate with pawn non-promotion capture in generation") {
-        // White king on a1 in check from b2 pawn. White pawn on c2 can capture b3 (non-promo)
-        // but that doesn't resolve check. Exercises non-promotion capture path.
-        val fen = "4k3/8/8/8/8/1p6/ppP5/K7 w - - 0 1"
+        // Same trapped king. White pawn on c2 can capture b3 (non-promo capture)
+        // but that doesn't resolve the check from b2. Exercises non-promo capture path.
+        val fen = "4k3/8/8/8/8/1pp5/ppP5/K7 w - - 0 1"
         val board = parseFen(fen).toOption.get
         assertTrue(isCheckmate(board))
       },
-      test("checkmate with sliding piece capture in generation") {
-        // White king on a1 in check from b2 pawn. White rook on b1 can capture b2 (sliding capture)
-        // but after capture, king is still attacked by a2 pawn on b1. Exercises sliding capture.
-        val fen = "4k3/8/8/8/8/8/pp6/KR6 w - - 0 1"
+      test("not checkmate when sliding capture resolves check") {
+        // White king trapped on a1, in check from b2 pawn (protected by c3).
+        // White rook on b1 can capture b2 to resolve check — exercises sliding capture
+        // generation in generateSlidingMoves (line 201).
+        val fen = "4k3/8/8/8/8/1pp5/pp6/KR6 w - - 0 1"
         val board = parseFen(fen).toOption.get
-        // Rook captures b2: rook on b2, but a1 king is now attacked by... let's verify:
-        // After Rxb2, king on a1. Black pawn on a2 attacks b1 (no longer occupied). Is a1 attacked?
-        // Black pawn on a2 (0,1) attacks (1,0)=b1 diagonally. King on a1 (0,0) - not attacked by a2 pawn directly.
-        // Actually, pawn on a2 doesn't attack a1 (same file). So Rxb2 saves the king!
-        // This position is NOT checkmate. Let me use a different one.
-        assertTrue(!isCheckmate(board)) // Rook can capture, so not checkmate
+        assertTrue(!isCheckmate(board)) // Rxb2 resolves check
       },
       test("castling generation in hasLegalMoves - kingside") {
         // No white pieces before e1 in iteration order. King on e1 with K rights.
