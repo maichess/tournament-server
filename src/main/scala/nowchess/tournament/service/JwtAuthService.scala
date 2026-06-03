@@ -26,10 +26,12 @@ final class JwtAuthService(secret: String, identityRepo: IdentityRepository) ext
       val payload = new String(decoder.decode(parts(1)), StandardCharsets.UTF_8)
       val sub = extractField(payload, "sub").getOrElse(throw new Exception("missing sub"))
       val isBot = extractField(payload, "isBot").contains("true")
+      val name = extractField(payload, "name").getOrElse("")
       AuthContext(
         userId = UserId(sub),
         botId = if isBot then Some(BotId(sub)) else None,
         isBot = isBot,
+        name = name,
       )
 
   override def register(name: String, isBot: Boolean): Task[RegisterResult] =
@@ -41,13 +43,14 @@ final class JwtAuthService(secret: String, identityRepo: IdentityRepository) ext
           val prefix = if isBot then "bot_" else "usr_"
           val id = Identity(prefix + UUID.randomUUID().toString.take(8), name, isBot)
           identityRepo.save(id).as(id)
-      token = createToken(identity.id, identity.isBot)
+      token = createToken(identity.id, identity.isBot, identity.name)
     yield RegisterResult(identity.id, token)
 
-  def createToken(sub: String, isBot: Boolean): String =
+  def createToken(sub: String, isBot: Boolean, name: String = ""): String =
     val header = encoder.encodeToString("""{"alg":"HS256"}""".getBytes(StandardCharsets.UTF_8))
     val isBotStr = if isBot then "true" else "false"
-    val payload = encoder.encodeToString(s"""{"sub":"$sub","isBot":$isBotStr}""".getBytes(StandardCharsets.UTF_8))
+    val escapedName = name.replace("\\", "\\\\").replace("\"", "\\\"")
+    val payload = encoder.encodeToString(s"""{"sub":"$sub","isBot":$isBotStr,"name":"$escapedName"}""".getBytes(StandardCharsets.UTF_8))
     val signature = encoder.encodeToString(hmacSha256(s"$header.$payload"))
     s"$header.$payload.$signature"
 

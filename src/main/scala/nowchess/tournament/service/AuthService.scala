@@ -7,6 +7,7 @@ final case class AuthContext(
   userId: UserId,
   botId: Option[BotId],
   isBot: Boolean,
+  name: String,
 )
 
 final case class RegisterResult(id: String, token: String)

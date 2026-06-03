@@ -52,13 +52,13 @@ object AuthMiddlewareSpec extends ZIOSpecDefault:
       yield assertTrue(result.isLeft)
     ,
     test("requireBot with bot context succeeds"):
-      val ctx = AuthContext(UserId("bot1"), Some(BotId("bot1")), isBot = true)
+      val ctx = AuthContext(UserId("bot1"), Some(BotId("bot1")), isBot = true, name = "TestBot")
       for
         bot <- AuthMiddleware.requireBot(ctx)
-      yield assertTrue(bot.id == BotId("bot1"))
+      yield assertTrue(bot.id == BotId("bot1"), bot.name == "TestBot")
     ,
     test("requireBot with user context fails"):
-      val ctx = AuthContext(UserId("user1"), None, isBot = false)
+      val ctx = AuthContext(UserId("user1"), None, isBot = false, name = "user")
       for
         result <- AuthMiddleware.requireBot(ctx).either
       yield assertTrue(result.isLeft)

@@ -19,5 +19,5 @@ object AuthMiddleware:
 
   def requireBot(ctx: AuthContext): IO[DomainError, BotRef] =
     ctx.botId match
-      case Some(botId) if ctx.isBot => ZIO.succeed(BotRef(botId, ""))
+      case Some(botId) if ctx.isBot => ZIO.succeed(BotRef(botId, ctx.name))
       case _ => ZIO.fail(DomainError.Forbidden("must be a bot account"))

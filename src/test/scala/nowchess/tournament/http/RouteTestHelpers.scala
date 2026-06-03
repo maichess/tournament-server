@@ -16,10 +16,10 @@ object RouteTestHelpers:
     new AuthService:
       override def validateToken(token: String): Task[AuthContext] =
         token match
-          case "bot1-token" => ZIO.succeed(AuthContext(UserId("bot1"), Some(BotId("bot1")), isBot = true))
-          case "bot2-token" => ZIO.succeed(AuthContext(UserId("bot2"), Some(BotId("bot2")), isBot = true))
-          case "user-token" => ZIO.succeed(AuthContext(UserId("user1"), None, isBot = false))
-          case "director-token" => ZIO.succeed(AuthContext(UserId("director1"), None, isBot = false))
+          case "bot1-token" => ZIO.succeed(AuthContext(UserId("bot1"), Some(BotId("bot1")), isBot = true, name = "TestBot1"))
+          case "bot2-token" => ZIO.succeed(AuthContext(UserId("bot2"), Some(BotId("bot2")), isBot = true, name = "TestBot2"))
+          case "user-token" => ZIO.succeed(AuthContext(UserId("user1"), None, isBot = false, name = "user1"))
+          case "director-token" => ZIO.succeed(AuthContext(UserId("director1"), None, isBot = false, name = "director1"))
           case _ => ZIO.fail(new Exception("invalid token"))
 
       override def register(name: String, isBot: Boolean): Task[RegisterResult] =
