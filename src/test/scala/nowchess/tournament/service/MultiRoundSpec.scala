@@ -5,7 +5,7 @@ import zio.test.*
 import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.game.GameStatus
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 
 object MultiRoundSpec extends ZIOSpecDefault:
 
@@ -16,7 +16,9 @@ object MultiRoundSpec extends ZIOSpecDefault:
   private val testLayer =
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
-    StreamServiceLive.layer >>>
+    StreamServiceLive.layer ++
+    (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
     (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository])
 
   private def foolsMate(gsvc: GameService, gameRepo: GameRepository, gameId: GameId) =
@@ -162,7 +164,9 @@ object MultiRoundSpec extends ZIOSpecDefault:
       ).provide(
         InMemoryTournamentRepository.layer ++
         InMemoryGameRepository.layer ++
-        StreamServiceLive.layer >>>
+        StreamServiceLive.layer ++
+        (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+        (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
         (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[StreamService] ++ ZLayer.service[GameRepository])
       )
     },

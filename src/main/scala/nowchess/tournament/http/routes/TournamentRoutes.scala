@@ -83,6 +83,9 @@ object TournamentRoutes:
       startPosition = StartPosition.fromString(params.getOrElse("startPosition", "standard")),
       matchesPerPairing = params.get("matchesPerPairing").flatMap(_.toIntOption).getOrElse(1),
       groupSize = params.get("groupSize").flatMap(_.toIntOption),
+      opening = params.get("opening"),
+      bots = params.get("bots"),
+      maxConcurrentGames = params.get("maxConcurrentGames").flatMap(_.toIntOption),
     )
 
   def errorToResponse(e: Throwable): Response =

@@ -5,7 +5,7 @@ import zio.test.*
 import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.error.DomainError
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 
 object TournamentServiceSpec extends ZIOSpecDefault:
 
@@ -22,7 +22,9 @@ object TournamentServiceSpec extends ZIOSpecDefault:
   private val testLayer =
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
-    StreamServiceLive.layer >>>
+    StreamServiceLive.layer ++
+    (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
     TournamentServiceLive.layer
 
   def spec = suite("TournamentService")(

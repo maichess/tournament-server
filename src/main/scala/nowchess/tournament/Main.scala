@@ -4,7 +4,7 @@ import zio.*
 import zio.http.*
 import nowchess.tournament.config.AppConfig
 import nowchess.tournament.http.routes.*
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, InMemoryIdentityRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, InMemoryIdentityRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 import nowchess.tournament.service.*
 
 object Main extends ZIOAppDefault:
@@ -17,7 +17,9 @@ object Main extends ZIOAppDefault:
     ParticipationRoutes.routes ++
     ResultRoutes.routes ++
     StreamRoutes.routes ++
-    GameRoutes.routes
+    GameRoutes.routes ++
+    OpeningRoutes.routes ++
+    BotRegistryRoutes.routes
 
   override val run: ZIO[Any, Throwable, Nothing] =
     Server.serve(allRoutes).provide(
@@ -25,6 +27,10 @@ object Main extends ZIOAppDefault:
       InMemoryTournamentRepository.layer,
       InMemoryGameRepository.layer,
       InMemoryIdentityRepository.layer,
+      InMemoryOpeningRepository.layer,
+      InMemoryBotRegistryRepository.layer,
+      OpeningServiceLive.layer,
+      BotRegistryServiceLive.layer,
       TournamentServiceLive.layer,
       GameServiceLive.layer,
       StreamServiceLive.layer,

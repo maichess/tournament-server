@@ -15,4 +15,5 @@ final case class Tournament(
   createdAt: Instant,
   startedAt: Option[Instant],
   winner: Option[BotRef],
+  seed: Long = 0L,
 )

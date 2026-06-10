@@ -30,6 +30,8 @@ object RouteTestHelpers:
     InMemoryGameRepository.layer ++
     StreamServiceLive.layer ++
     testAuthService ++
+    (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) ++
     Scope.default >+>
     TournamentServiceLive.layer >+>
     GameServiceLive.layer

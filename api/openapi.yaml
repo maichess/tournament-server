@@ -3,7 +3,7 @@ info:
   title: NowChess Tournament API
   description: |
     Bot tournaments with pluggable formats (Swiss, elimination, group stage,
-    league), modelled after the Lichess API style.
+    league, random knockout), modelled after the Lichess API style.
 
     The tournament server is fully self-contained — it manages game state,
     moves, and outcomes internally.
@@ -55,6 +55,10 @@ tags:
     description: NDJSON event streams
   - name: Game
     description: In-game move submission and state
+  - name: Openings
+    description: Named starting positions (catalog and custom)
+  - name: Registry
+    description: Permanently registered bots
 
 paths:
 
@@ -245,6 +249,142 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /api/tournament/{id}/participants:
+    parameters:
+      - $ref: "#/components/parameters/id"
+
+    post:
+      tags: [Participation]
+      summary: Add a registered bot to the tournament
+      description: |
+        Adds a permanently registered bot (see `GET /api/bots`) as a participant
+        by id, without re-supplying its details. Only the director may do this,
+        and only while status is `created`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddParticipantRequest"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ok"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/openings:
+    get:
+      tags: [Openings]
+      summary: List named starting positions
+      description: Returns the built-in opening catalog plus any custom entries. No auth required.
+      security: []
+      responses:
+        "200":
+          description: Named openings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  openings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Opening"
+
+    post:
+      tags: [Openings]
+      summary: Register a custom named position
+      description: |
+        Registers a custom named starting position usable by any tournament.
+        The `key` is derived from `name` when omitted. Catalog keys are reserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterOpeningRequest"
+      responses:
+        "201":
+          description: Opening registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opening"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/bots:
+    get:
+      tags: [Registry]
+      summary: List registered bots
+      description: Returns all permanently registered bots. No auth required.
+      security: []
+      responses:
+        "200":
+          description: Registered bots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RegisteredBot"
+
+    post:
+      tags: [Registry]
+      summary: Register a bot permanently
+      description: |
+        Registers a bot so it can later be added to tournaments by id alone.
+        Returns the generated bot id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBotRequest"
+      responses:
+        "201":
+          description: Bot registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisteredBot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/bots/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+
+    delete:
+      tags: [Registry]
+      summary: Remove a registered bot
+      responses:
+        "204":
+          description: Removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/tournament/{id}/results:
     parameters:
@@ -499,6 +639,71 @@ components:
           description: JWT bearer token for subsequent requests
           example: eyJhbGciOiJIUzI1NiJ9...
 
+    Opening:
+      type: object
+      properties:
+        key:
+          type: string
+          example: vienna
+        name:
+          type: string
+          example: Vienna Opening
+        fen:
+          type: string
+          example: rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2
+
+    RegisterOpeningRequest:
+      type: object
+      required: [name, fen]
+      properties:
+        name:
+          type: string
+          example: London System
+        fen:
+          type: string
+          description: FEN of the starting position
+          example: rnbqkbnr/ppp1pppp/8/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq - 2 2
+        key:
+          type: string
+          description: Optional explicit key; derived from `name` when omitted. Catalog keys are reserved.
+          example: london
+
+    RegisteredBot:
+      type: object
+      properties:
+        id:
+          type: string
+          example: a1b2c3d4
+        name:
+          type: string
+          example: StockfishClone
+        endpoint:
+          type: string
+          nullable: true
+          description: Optional external play URL for the bot
+          example: https://bots.example.com/stockfish
+
+    RegisterBotRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: StockfishClone
+        endpoint:
+          type: string
+          description: Optional external play URL for the bot
+          example: https://bots.example.com/stockfish
+
+    AddParticipantRequest:
+      type: object
+      required: [botId]
+      properties:
+        botId:
+          type: string
+          description: Id of a registered bot
+          example: a1b2c3d4
+
     Clock:
       type: object
       required: [limit, increment]
@@ -568,7 +773,7 @@ components:
           example: 5
         format:
           type: string
-          enum: [swiss, singleElimination, doubleElimination, groupStage, league]
+          enum: [swiss, singleElimination, doubleElimination, groupStage, league, randomKnockout]
           example: swiss
         matchesPerPairing:
           type: integer
@@ -630,7 +835,7 @@ components:
           default: true
         format:
           type: string
-          enum: [swiss, singleElimination, doubleElimination, groupStage, league]
+          enum: [swiss, singleElimination, doubleElimination, groupStage, league, randomKnockout]
           default: swiss
           description: Tournament format
         startPosition:
@@ -646,6 +851,27 @@ components:
           type: integer
           minimum: 2
           description: Required when format is `groupStage`. Number of bots per group.
+        opening:
+          type: string
+          description: |
+            Key of a named opening (see `GET /api/openings`) to use as the
+            starting position, e.g. `vienna`. Takes precedence over
+            `startPosition`. Unknown keys are rejected with 400.
+          example: vienna
+        bots:
+          type: string
+          description: |
+            Comma-separated list of registered bot ids (see `GET /api/bots`) to
+            add as participants at creation time. Unknown ids are rejected with 400.
+          example: a1b2c3d4,e5f6g7h8
+        maxConcurrentGames:
+          type: integer
+          minimum: 1
+          description: |
+            Maximum number of games per round that may be active at once. Extra
+            games stay `pending` and are activated as running games finish.
+            Omit for unlimited concurrency.
+          example: 4
 
     Result:
       type: object
@@ -740,7 +966,11 @@ components:
           example: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
         status:
           type: string
-          enum: [ongoing, checkmate, stalemate, draw, resigned, timeout]
+          enum: [pending, ongoing, checkmate, stalemate, draw, resigned, timeout]
+          description: |
+            `pending` means the game has been created but is not yet active
+            because of the tournament's `maxConcurrentGames` cap; it activates
+            (becomes `ongoing`) as running games finish.
           example: ongoing
         turn:
           type: string

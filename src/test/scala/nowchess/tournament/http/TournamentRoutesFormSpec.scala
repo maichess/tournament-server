@@ -77,6 +77,35 @@ object TournamentRoutesFormSpec extends ZIOSpecDefault:
         r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&startPosition=rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR%20b%20KQkq%20e3%200%201")
       yield assertTrue(r.status == Status.Created)
     },
+    test("with format=randomKnockout") {
+      for
+        r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&format=randomKnockout")
+        body <- r.body.asString
+      yield assertTrue(
+        r.status == Status.Created,
+        body.contains("\"format\":\"randomKnockout\""),
+      )
+    },
+    test("with a named opening resolves the start position") {
+      for
+        r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&opening=vienna")
+      yield assertTrue(r.status == Status.Created)
+    },
+    test("with an unknown opening returns bad request") {
+      for
+        r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&opening=ghost")
+      yield assertTrue(r.status == Status.BadRequest)
+    },
+    test("with maxConcurrentGames") {
+      for
+        r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&maxConcurrentGames=2")
+      yield assertTrue(r.status == Status.Created)
+    },
+    test("with an unknown registered bot returns bad request") {
+      for
+        r <- postCreate("name=Test&nbRounds=1&clockLimit=300&clockIncrement=5&bots=ghostbot")
+      yield assertTrue(r.status == Status.BadRequest)
+    },
     test("empty body") {
       for r <- postCreate("")
       yield assertTrue(r.status == Status.BadRequest)

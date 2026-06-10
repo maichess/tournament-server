@@ -5,6 +5,7 @@ import zio.test.*
 import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.game.*
+import nowchess.tournament.domain.opening.Opening
 
 object RepositorySpec extends ZIOSpecDefault:
 
@@ -106,4 +107,33 @@ object RepositorySpec extends ZIOSpecDefault:
         yield assertTrue(result.isEmpty)
       ,
     ),
-  ).provide(InMemoryTournamentRepository.layer ++ InMemoryGameRepository.layer ++ InMemoryIdentityRepository.layer) @@ TestAspect.sequential
+    suite("OpeningRepository companion")(
+      test("save, get and list via companion") {
+        val opening = Opening("custom", "Custom", "fen")
+        for
+          _ <- OpeningRepository.save(opening)
+          got <- OpeningRepository.get("custom")
+          all <- OpeningRepository.list
+        yield assertTrue(got.contains(opening), all.contains(opening))
+      },
+      test("get returns None for a missing key") {
+        for got <- OpeningRepository.get("missing")
+        yield assertTrue(got.isEmpty)
+      },
+    ),
+    suite("BotRegistryRepository companion")(
+      test("save, get, list and delete via companion") {
+        val bot = RegisteredBot(BotId("rb1"), "RegBot", Some("http://x"))
+        for
+          _ <- BotRegistryRepository.save(bot)
+          got <- BotRegistryRepository.get(BotId("rb1"))
+          all <- BotRegistryRepository.list
+          _ <- BotRegistryRepository.delete(BotId("rb1"))
+          gone <- BotRegistryRepository.get(BotId("rb1"))
+        yield assertTrue(got.contains(bot), all.contains(bot), gone.isEmpty)
+      },
+    ),
+  ).provide(
+    InMemoryTournamentRepository.layer ++ InMemoryGameRepository.layer ++ InMemoryIdentityRepository.layer ++
+    InMemoryOpeningRepository.layer ++ InMemoryBotRegistryRepository.layer
+  ) @@ TestAspect.sequential

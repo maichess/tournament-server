@@ -10,4 +10,5 @@ final case class TournamentConfig(
   format: TournamentFormat,
   startPosition: StartPosition,
   matchesPerPairing: Int,
+  maxConcurrentGames: Option[Int] = None,
 )

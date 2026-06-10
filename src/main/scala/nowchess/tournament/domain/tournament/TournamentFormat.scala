@@ -6,3 +6,4 @@ enum TournamentFormat:
   case DoubleElimination
   case GroupStage(groupSize: Int)
   case League
+  case RandomKnockout

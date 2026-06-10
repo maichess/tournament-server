@@ -6,7 +6,7 @@ import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.game.{GameStatus, Game, GameClock}
 import nowchess.tournament.domain.error.DomainError
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository, TournamentRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository, TournamentRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 
 object GameServiceCoverageSpec extends ZIOSpecDefault:
 
@@ -19,7 +19,9 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
   private val testLayer =
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
-    StreamServiceLive.layer >>>
+    StreamServiceLive.layer ++
+    (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
     (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository] ++ ZLayer.service[TournamentRepository])
 
   private def foolsMate(gsvc: GameService, gameRepo: GameRepository, gameId: GameId) =

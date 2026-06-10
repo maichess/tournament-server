@@ -2,6 +2,7 @@ package nowchess.tournament.http.codec
 
 import zio.json.*
 import nowchess.tournament.domain.model.*
+import nowchess.tournament.domain.opening.Opening
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.round.{Round, Pairing, Match as GameMatch}
 import nowchess.tournament.domain.standing.{Standing, Result}
@@ -28,6 +29,10 @@ object JsonCodecs:
   given JsonDecoder[Variant] = DeriveJsonDecoder.gen[Variant]
   given JsonEncoder[BotRef] = DeriveJsonEncoder.gen[BotRef]
   given JsonDecoder[BotRef] = DeriveJsonDecoder.gen[BotRef]
+  given JsonEncoder[Opening] = DeriveJsonEncoder.gen[Opening]
+  given JsonDecoder[Opening] = DeriveJsonDecoder.gen[Opening]
+  given JsonEncoder[RegisteredBot] = DeriveJsonEncoder.gen[RegisteredBot]
+  given JsonDecoder[RegisteredBot] = DeriveJsonDecoder.gen[RegisteredBot]
   given JsonEncoder[GameClock] = DeriveJsonEncoder.gen[GameClock]
   given JsonDecoder[GameClock] = DeriveJsonDecoder.gen[GameClock]
 
@@ -52,6 +57,7 @@ object JsonCodecs:
     case other   => Left(s"Invalid outcome: $other")
 
   given JsonEncoder[GameStatus] = JsonEncoder[String].contramap:
+    case GameStatus.Pending   => "pending"
     case GameStatus.Ongoing   => "ongoing"
     case GameStatus.Checkmate => "checkmate"
     case GameStatus.Stalemate => "stalemate"
@@ -60,6 +66,7 @@ object JsonCodecs:
     case GameStatus.Timeout   => "timeout"
 
   given JsonDecoder[GameStatus] = JsonDecoder[String].mapOrFail:
+    case "pending"   => Right(GameStatus.Pending)
     case "ongoing"   => Right(GameStatus.Ongoing)
     case "checkmate" => Right(GameStatus.Checkmate)
     case "stalemate" => Right(GameStatus.Stalemate)
@@ -79,6 +86,7 @@ object JsonCodecs:
     case TournamentFormat.DoubleElimination => "doubleElimination"
     case TournamentFormat.GroupStage(_)     => "groupStage"
     case TournamentFormat.League           => "league"
+    case TournamentFormat.RandomKnockout   => "randomKnockout"
 
   given JsonDecoder[TournamentFormat] = JsonDecoder[String].mapOrFail:
     case "swiss"             => Right(TournamentFormat.Swiss)
@@ -86,6 +94,7 @@ object JsonCodecs:
     case "doubleElimination" => Right(TournamentFormat.DoubleElimination)
     case "groupStage"        => Right(TournamentFormat.GroupStage(4))
     case "league"            => Right(TournamentFormat.League)
+    case "randomKnockout"    => Right(TournamentFormat.RandomKnockout)
     case other               => Left(s"Invalid format: $other")
 
   given JsonEncoder[StartPosition] = JsonEncoder[String].contramap:

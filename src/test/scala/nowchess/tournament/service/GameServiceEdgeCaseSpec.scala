@@ -6,7 +6,7 @@ import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.game.{GameStatus, Game, GameClock}
 import nowchess.tournament.domain.error.DomainError
-import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository}
+import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, GameRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 
 object GameServiceEdgeCaseSpec extends ZIOSpecDefault:
 
@@ -17,7 +17,9 @@ object GameServiceEdgeCaseSpec extends ZIOSpecDefault:
   private val testLayer =
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
-    StreamServiceLive.layer >>>
+    StreamServiceLive.layer ++
+    (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
+    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
     (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository])
 
   def spec = suite("GameService edge cases")(

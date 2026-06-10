@@ -37,6 +37,7 @@ final class GameServiceLive(
     for
       game <- getGame(gameId)
       _    <- ZIO.when(game.status.isTerminal)(ZIO.fail(DomainError.Conflict("game already finished")))
+      _    <- ZIO.when(game.status == GameStatus.Pending)(ZIO.fail(DomainError.Conflict("game not active")))
       _    <- ZIO.when(game.currentPlayer.id != botId)(ZIO.fail(DomainError.Forbidden("not your turn")))
       move <- ZIO.fromEither(ChessRules.parseUci(uci)).mapError(e => DomainError.BadRequest(e))
       board <- ZIO.fromEither(ChessRules.parseFen(game.fen)).mapError(e => DomainError.BadRequest(e))
@@ -91,7 +92,8 @@ final class GameServiceLive(
             val updatedRound = currentRound.copy(pairings = updatedPairings)
             ZIO.fromEither(TournamentLifecycle.updateRound(tournament, tournament.currentRound, updatedRound)).flatMap: updated =>
               tournamentRepo.save(updated) *>
-                ZIO.when(updatedRound.isComplete(tournament.config.matchesPerPairing))(handleRoundComplete(updated)).unit
+                (if updatedRound.isComplete(tournament.config.matchesPerPairing) then handleRoundComplete(updated)
+                 else GameActivation.activate(updated, updatedRound, gameRepo, streamService))
 
   private def handleRoundComplete(tournament: Tournament): Task[Unit] =
     streamService.publishTournament(tournament.id, TournamentEvent.RoundFinished(tournament.currentRound)) *>
@@ -108,7 +110,7 @@ final class GameServiceLive(
   private def startNextRound(tournament: Tournament): Task[Unit] =
     ZIO.fromEither(TournamentLifecycle.advanceRound(tournament)).flatMap: advanced =>
       val standings = ScoringRules.computeStandings(advanced)
-      val algorithm = selectAlgorithm(advanced.config.format)
+      val algorithm = selectAlgorithm(advanced)
       val roundNum = advanced.currentRound
       val pairings = algorithm.pair(advanced.participants, standings, advanced.rounds, roundNum)
       ZIO.foreach(pairings)(createGamesForPairing(advanced, roundNum, _)).flatMap: games =>
@@ -120,15 +122,16 @@ final class GameServiceLive(
         ZIO.fromEither(TournamentLifecycle.addRound(advanced, round)).flatMap: withRound =>
           tournamentRepo.save(withRound) *>
             streamService.publishTournament(tournament.id, TournamentEvent.RoundStarted(roundNum)) *>
-            ZIO.foreach(roundPairings)(publishGameStartEvents(tournament.id, roundNum, _)).unit
+            GameActivation.activate(withRound, round, gameRepo, streamService)
 
-  private def selectAlgorithm(format: TournamentFormat): PairingAlgorithm =
-    format match
-      case TournamentFormat.Swiss            => SwissPairing
+  private def selectAlgorithm(tournament: Tournament): PairingAlgorithm =
+    tournament.config.format match
+      case TournamentFormat.Swiss             => SwissPairing
       case TournamentFormat.SingleElimination => EliminationBracket
       case TournamentFormat.DoubleElimination => EliminationBracket
       case TournamentFormat.GroupStage(_)     => GroupStagePairing
-      case TournamentFormat.League           => RoundRobinPairing
+      case TournamentFormat.League            => RoundRobinPairing
+      case TournamentFormat.RandomKnockout    => RandomKnockoutPairing(tournament.seed)
 
   private def createGamesForPairing(
     tournament: Tournament,
@@ -142,23 +145,12 @@ final class GameServiceLive(
       val game = Game(
         id = gameId, tournamentId = tournament.id, round = roundNum,
         white = white, black = black, moves = Vector.empty,
-        status = GameStatus.Ongoing, turn = Color.White, winner = None,
+        status = GameStatus.Pending, turn = Color.White, winner = None,
         clock = GameClock(tournament.config.clock.limit.toDouble, tournament.config.clock.limit.toDouble),
         startPosition = tournament.config.startPosition, fen = fen,
       )
       gameRepo.save(game).as(gameId)
     .map(ids => (pair, ids))
-
-  private def publishGameStartEvents(
-    tournamentId: TournamentId,
-    round: Int,
-    pairing: Pairing,
-  ): UIO[Unit] =
-    val firstGameId = pairing.matches.head.gameId
-    streamService.publishTournament(tournamentId,
-      TournamentEvent.GameStart(round, firstGameId, Color.White)) *>
-    streamService.publishTournament(tournamentId,
-      TournamentEvent.GameStart(round, firstGameId, Color.Black))
 
 object GameServiceLive:
   val layer: URLayer[GameRepository & TournamentRepository & StreamService, GameService] =
