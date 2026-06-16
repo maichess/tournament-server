@@ -4,6 +4,7 @@ import zio.*
 import zio.http.*
 import zio.json.*
 import nowchess.tournament.domain.model.*
+import nowchess.tournament.domain.event.GameEvent
 import nowchess.tournament.service.*
 import nowchess.tournament.http.codec.JsonCodecs.{*, given}
 import nowchess.tournament.http.middleware.AuthMiddleware
@@ -28,9 +29,11 @@ object GameRoutes:
   private def streamGame(gameId: String, req: Request): ZIO[GameService & StreamService & AuthService, Nothing, Response] =
     (for
       _ <- AuthMiddleware.extractAuth(req)
-      game <- GameService.getGame(GameId(gameId))
       stream <- StreamService.subscribeGame(GameId(gameId))
-      body = Body.fromStreamChunked(stream.mapConcatChunk(e => zio.Chunk.fromArray((e.toJson + "\n").getBytes)))
+      game <- GameService.getGame(GameId(gameId))
+      snapshot = GameEvent.GameState(game.fen, game.movesUci, game.turn, game.clock, game.status, game.winner)
+      events = zio.stream.ZStream.succeed(snapshot) ++ stream
+      body = Body.fromStreamChunked(events.mapConcatChunk(e => zio.Chunk.fromArray((e.toJson + "\n").getBytes)))
     yield Response(
       status = Status.Ok,
       headers = Headers(Header.ContentType(MediaType("application", "x-ndjson"))),

@@ -1,6 +1,7 @@
 package nowchess.tournament.http
 
 import zio.*
+import zio.stream.*
 import zio.test.*
 import zio.test.Assertion.*
 import zio.http.*
@@ -106,6 +107,22 @@ object GameRoutesSpec extends ZIOSpecDefault:
       yield assertTrue(
         response.status == Status.Ok,
         response.header(Header.ContentType).exists(_.mediaType.subType == "x-ndjson"),
+      )
+    ,
+    test("GET /game/{gameId}/stream emits full game state snapshot on connect"):
+      for
+        (tid, gid) <- createStartedAndGetGameId
+        response <- allRoutes.runZIO(
+          Request.get(URL(Path.root / "api" / "tournament" / tid / "game" / gid / "stream"))
+            .addHeaders(authHeader("bot1-token"))
+        )
+        firstLine <- response.body.asStream
+          .via(ZPipeline.utf8Decode >>> ZPipeline.splitLines)
+          .runHead
+      yield assertTrue(
+        firstLine.exists(_.contains("\"type\":\"gameState\"")),
+        firstLine.exists(_.contains("\"status\":\"ongoing\"")),
+        firstLine.exists(_.contains("\"turn\":\"white\"")),
       )
     ,
     test("GET /game/{gameId}/stream without auth fails"):
