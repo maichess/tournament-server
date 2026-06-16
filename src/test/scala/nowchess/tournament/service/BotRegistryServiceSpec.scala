@@ -4,11 +4,12 @@ import zio.*
 import zio.test.*
 import nowchess.tournament.domain.model.BotId
 import nowchess.tournament.domain.error.DomainError
-import nowchess.tournament.persistence.InMemoryBotRegistryRepository
+import nowchess.tournament.persistence.{InMemoryBotRegistryRepository, InMemoryIdentityRepository}
 
 object BotRegistryServiceSpec extends ZIOSpecDefault:
 
-  private val layer = InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer
+  private val authLayer = InMemoryIdentityRepository.layer >>> JwtAuthService.layer("test-secret")
+  private val layer = (InMemoryBotRegistryRepository.layer ++ authLayer) >>> BotRegistryServiceLive.layer
 
   def spec = suite("BotRegistryService")(
     test("register stores a bot with a generated id and trimmed name") {
@@ -21,6 +22,13 @@ object BotRegistryServiceSpec extends ZIOSpecDefault:
         bot.endpoint.contains("http://bot"),
         fetched.contains(bot),
       )
+    },
+    test("register returns an auth-backed id and is idempotent by name") {
+      for
+        svc <- ZIO.service[BotRegistryService]
+        a <- svc.register("Repeat", None)
+        b <- svc.register("Repeat", None)
+      yield assertTrue(a.id.value.startsWith("bot_"), a.id == b.id)
     },
     test("register treats a blank endpoint as absent") {
       for

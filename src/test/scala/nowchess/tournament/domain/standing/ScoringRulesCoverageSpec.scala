@@ -35,7 +35,7 @@ object ScoringRulesCoverageSpec extends ZIOSpecDefault:
       // Pairing references a bot NOT in participants list → BotRef(botId, "unknown") fallback
       val ghostBot = BotRef(BotId("ghost"), "Ghost")
       val round = Round(1, Vector(
-        Pairing(ghostBot, bot1, Vector(Match(GameId("g1"), Some(GameOutcome.White), None)), Some(GameOutcome.White))
+        Pairing(ghostBot, bot1, Vector(Match(GameId("g1"), ghostBot.id, Some(GameOutcome.White), None)), Some(GameOutcome.White))
       ))
       // Only bot1 is a participant, ghostBot is not
       val tournament = makeTournament(Vector(bot1), Vector(round))
@@ -49,7 +49,7 @@ object ScoringRulesCoverageSpec extends ZIOSpecDefault:
       // Pairing references bots not in participants. The initial map only has participants.
       // So getOrElse(whiteId, BotStats(...)) triggers for bots not in participants.
       val round = Round(1, Vector(
-        Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.Black), None)), Some(GameOutcome.Black))
+        Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.Black), None)), Some(GameOutcome.Black))
       ))
       // Neither bot is in participants
       val tournament = makeTournament(Vector.empty, Vector(round))
@@ -59,7 +59,7 @@ object ScoringRulesCoverageSpec extends ZIOSpecDefault:
     },
     test("draw outcome in pairing") {
       val round = Round(1, Vector(
-        Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.Draw), None)), Some(GameOutcome.Draw))
+        Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.Draw), None)), Some(GameOutcome.Draw))
       ))
       val tournament = makeTournament(Vector(bot1, bot2), Vector(round))
       val standings = ScoringRules.computeStandings(tournament)
@@ -69,7 +69,7 @@ object ScoringRulesCoverageSpec extends ZIOSpecDefault:
     },
     test("pairing with no outcome is skipped") {
       val round = Round(1, Vector(
-        Pairing(bot1, bot2, Vector(Match(GameId("g1"), None, None)), None)
+        Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, None, None)), None)
       ))
       val tournament = makeTournament(Vector(bot1, bot2), Vector(round))
       val standings = ScoringRules.computeStandings(tournament)

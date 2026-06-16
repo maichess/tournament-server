@@ -18,7 +18,7 @@ object TournamentFeaturesSpec extends ZIOSpecDefault:
      InMemoryGameRepository.layer ++
      StreamServiceLive.layer ++
      (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
-     (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer)) >+>
+     ServiceTestLayers.botRegistry) >+>
     (TournamentServiceLive.layer ++ GameServiceLive.layer)
 
   private def form(
@@ -27,11 +27,13 @@ object TournamentFeaturesSpec extends ZIOSpecDefault:
     opening: Option[String] = None,
     bots: Option[String] = None,
     maxConcurrentGames: Option[Int] = None,
+    openings: Option[String] = None,
   ) = CreateTournamentForm(
     name = "T", nbRounds = nbRounds, clockLimit = 300, clockIncrement = 3,
     rated = true, format = format, startPosition = StartPosition.Standard,
     matchesPerPairing = 1, groupSize = None,
     opening = opening, bots = bots, maxConcurrentGames = maxConcurrentGames,
+    openings = openings,
   )
 
   private def bot(n: Int) = BotRef(BotId(s"b$n"), s"Bot$n")
@@ -81,6 +83,38 @@ object TournamentFeaturesSpec extends ZIOSpecDefault:
         tsvc <- ZIO.service[TournamentService]
         t <- tsvc.create(form(maxConcurrentGames = Some(2)), director)
       yield assertTrue(t.config.maxConcurrentGames.contains(2))
+    },
+
+    test("create with an openings book sets startPositions and doubles matchesPerPairing") {
+      for
+        tsvc <- ZIO.service[TournamentService]
+        t <- tsvc.create(form(openings = Some("vienna, italian")), director)
+      yield assertTrue(
+        t.config.startPositions.size == 2,
+        t.config.matchesPerPairing == 4,
+      )
+    },
+    test("create rejects an unknown opening in the book") {
+      for
+        tsvc <- ZIO.service[TournamentService]
+        e <- tsvc.create(form(openings = Some("vienna,ghost")), director).flip
+      yield assertTrue(e.isInstanceOf[DomainError.BadRequest])
+    },
+    test("start with an openings book plays each position twice with reversed colours") {
+      for
+        tsvc <- ZIO.service[TournamentService]
+        gameRepo <- ZIO.service[GameRepository]
+        t <- tsvc.create(form(openings = Some("vienna,italian")), director)
+        _ <- tsvc.join(t.id, bot(1))
+        _ <- tsvc.join(t.id, bot(2))
+        _ <- tsvc.start(t.id, director)
+        games <- gameRepo.findByTournament(t.id)
+      yield assertTrue(
+        games.size == 4,
+        games.count(_.white.id == bot(1).id) == 2,
+        games.count(_.white.id == bot(2).id) == 2,
+        games.map(_.fen).distinct.size == 2,
+      )
     },
 
     test("addRegisteredBot adds a registered bot to the tournament") {

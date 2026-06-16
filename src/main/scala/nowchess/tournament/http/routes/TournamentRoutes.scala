@@ -86,6 +86,7 @@ object TournamentRoutes:
       opening = params.get("opening"),
       bots = params.get("bots"),
       maxConcurrentGames = params.get("maxConcurrentGames").flatMap(_.toIntOption),
+      openings = params.get("openings"),
     )
 
   def errorToResponse(e: Throwable): Response =

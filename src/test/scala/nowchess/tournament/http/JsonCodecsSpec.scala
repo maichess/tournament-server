@@ -209,7 +209,7 @@ object JsonCodecsSpec extends ZIOSpecDefault:
       assertTrue(r.toJson.contains("\"created\":[]"))
     ,
     test("Match encodes"):
-      val m = GameMatch(GameId("g1"), None, None)
+      val m = GameMatch(GameId("g1"), BotId("w"), None, None)
       assertTrue(m.toJson.contains("g1"))
     ,
     test("Pairing encodes"):

@@ -11,10 +11,21 @@ final case class Pairing(
   def isComplete(matchesPerPairing: Int): Boolean =
     aggregateOutcome.isDefined || earlyWinner(matchesPerPairing).isDefined
 
+  /** A game's outcome from the pairing's nominal White perspective, flipping it
+    * when colours were reversed for that game (multi-position opening book). */
+  private def outcomeForNominalWhite(m: Match): Option[GameOutcome] =
+    m.outcome.map: o =>
+      if m.whiteId == white.id then o
+      else
+        o match
+          case GameOutcome.White => GameOutcome.Black
+          case GameOutcome.Black => GameOutcome.White
+          case GameOutcome.Draw  => GameOutcome.Draw
+
   def earlyWinner(matchesPerPairing: Int): Option[GameOutcome] =
     val needed = (matchesPerPairing + 1) / 2
-    val whiteWins = matches.count(_.outcome.contains(GameOutcome.White))
-    val blackWins = matches.count(_.outcome.contains(GameOutcome.Black))
+    val whiteWins = matches.count(outcomeForNominalWhite(_).contains(GameOutcome.White))
+    val blackWins = matches.count(outcomeForNominalWhite(_).contains(GameOutcome.Black))
     if whiteWins >= needed then Some(GameOutcome.White)
     else if blackWins >= needed then Some(GameOutcome.Black)
     else if matches.count(_.outcome.isDefined) == matchesPerPairing then

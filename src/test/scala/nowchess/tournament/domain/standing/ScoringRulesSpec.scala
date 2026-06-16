@@ -27,7 +27,7 @@ object ScoringRulesSpec extends ZIOSpecDefault:
 
   private def mkPairing(white: BotRef, black: BotRef, outcome: Option[GameOutcome]) =
     Pairing(white, black,
-      Vector(Match(GameId("g1"), outcome, None)),
+      Vector(Match(GameId("g1"), white.id, outcome, None)),
       outcome,
     )
 

@@ -26,6 +26,7 @@ final case class CreateTournamentForm(
   opening: Option[String] = None,
   bots: Option[String] = None,
   maxConcurrentGames: Option[Int] = None,
+  openings: Option[String] = None,
 )
 
 trait TournamentService:
@@ -70,7 +71,12 @@ final class TournamentServiceLive(
       now <- zio.Clock.instant
       seed <- zio.Random.nextLong
       startPosition <- resolveStartPosition(form)
+      openingBook <- resolveOpeningBook(form)
       participants <- resolveParticipants(form)
+      // A multi-position opening book plays every position twice (colours
+      // reversed) per pairing, so the pairing total is 2 * book size; keep
+      // matchesPerPairing in step so completion/early-winner counts match.
+      matchesPerPairing = if openingBook.nonEmpty then 2 * openingBook.size else form.matchesPerPairing
       tournament = Tournament(
         id = id,
         config = TournamentConfig(
@@ -80,8 +86,9 @@ final class TournamentServiceLive(
           rated = form.rated,
           format = form.format,
           startPosition = startPosition,
-          matchesPerPairing = form.matchesPerPairing,
+          matchesPerPairing = matchesPerPairing,
           maxConcurrentGames = form.maxConcurrentGames,
+          startPositions = openingBook,
         ),
         status = TournamentStatus.Created,
         participants = participants,
@@ -103,6 +110,13 @@ final class TournamentServiceLive(
         openingService.resolve(key).flatMap:
           case Some(fen) => ZIO.succeed(StartPosition.FromFen(fen))
           case None      => ZIO.fail(DomainError.BadRequest(s"unknown opening: $key"))
+
+  private def resolveOpeningBook(form: CreateTournamentForm): Task[Vector[StartPosition]] =
+    val keys = form.openings.map(_.split(',').map(_.trim).filter(_.nonEmpty).toVector).getOrElse(Vector.empty)
+    ZIO.foreach(keys): key =>
+      openingService.resolve(key).flatMap:
+        case Some(fen) => ZIO.succeed(StartPosition.FromFen(fen))
+        case None      => ZIO.fail(DomainError.BadRequest(s"unknown opening: $key"))
 
   private def resolveParticipants(form: CreateTournamentForm): Task[Vector[BotRef]] =
     val ids = form.bots.map(_.split(',').map(_.trim).filter(_.nonEmpty).toVector.distinct).getOrElse(Vector.empty)
@@ -133,10 +147,8 @@ final class TournamentServiceLive(
       algorithm = selectAlgorithm(started)
       pairings = algorithm.pair(started.participants, Vector.empty, Vector.empty, 1)
       games <- ZIO.foreach(pairings)(createGamesForPairing(started, 1, _))
-      roundPairings = games.map((pair, gameIds) =>
-        Pairing(pair._1, pair._2,
-          gameIds.map(gid => Match(gid, None, None)),
-          None))
+      roundPairings = games.map((pair, matches) =>
+        Pairing(pair._1, pair._2, matches, None))
       round = Round(1, roundPairings)
       withRound <- ZIO.fromEither(TournamentLifecycle.addRound(started, round))
       _ <- repo.save(withRound)
@@ -173,27 +185,8 @@ final class TournamentServiceLive(
     tournament: Tournament,
     roundNum: Int,
     pair: (BotRef, BotRef),
-  ): Task[((BotRef, BotRef), Vector[GameId])] =
-    val (white, black) = pair
-    ZIO.foreach((1 to tournament.config.matchesPerPairing).toVector): matchNum =>
-      val gameId = GameId(java.util.UUID.randomUUID().toString.take(8))
-      val fen = tournament.config.startPosition.toFen
-      val game = Game(
-        id = gameId,
-        tournamentId = tournament.id,
-        round = roundNum,
-        white = white,
-        black = black,
-        moves = Vector.empty,
-        status = GameStatus.Pending,
-        turn = Color.White,
-        winner = None,
-        clock = GameClock(tournament.config.clock.limit.toDouble, tournament.config.clock.limit.toDouble),
-        startPosition = tournament.config.startPosition,
-        fen = fen,
-      )
-      gameRepo.save(game).as(gameId)
-    .map(ids => (pair, ids))
+  ): Task[((BotRef, BotRef), Vector[Match])] =
+    GameFactory.create(tournament, roundNum, pair, gameRepo).map(matches => (pair, matches))
 
 object TournamentServiceLive:
   val layer: URLayer[TournamentRepository & GameRepository & StreamService & OpeningService & BotRegistryService, TournamentService] =

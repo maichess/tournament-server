@@ -355,6 +355,12 @@ paths:
       description: |
         Registers a bot so it can later be added to tournaments by id alone.
         Returns the generated bot id.
+
+        The id is backed by a bot auth identity (it doubles as a JWT subject),
+        so a client that mints a token for the same name via
+        `POST /api/auth/register` can drive the bot's moves once it has been
+        added to a tournament. Registering the same name again is idempotent and
+        resolves to the same id.
       requestBody:
         required: true
         content:
@@ -872,6 +878,15 @@ components:
             games stay `pending` and are activated as running games finish.
             Omit for unlimited concurrency.
           example: 4
+        openings:
+          type: string
+          description: |
+            Comma-separated list of opening keys (see `GET /api/openings`) forming
+            a thematic opening book. When set, every pairing plays each listed
+            position twice with the colours reversed (so `matchesPerPairing`
+            becomes `2 * openings`), and `opening`/`startPosition` are ignored.
+            Unknown keys are rejected with 400.
+          example: vienna,italian,ruyLopez
 
     Result:
       type: object

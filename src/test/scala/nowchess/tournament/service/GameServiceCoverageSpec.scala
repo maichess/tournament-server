@@ -21,7 +21,7 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
     InMemoryGameRepository.layer ++
     StreamServiceLive.layer ++
     (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
-    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
+    ServiceTestLayers.botRegistry >>>
     (TournamentServiceLive.layer ++ GameServiceLive.layer ++ ZLayer.service[GameRepository] ++ ZLayer.service[TournamentRepository])
 
   private def foolsMate(gsvc: GameService, gameRepo: GameRepository, gameId: GameId) =

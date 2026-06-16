@@ -10,7 +10,7 @@ object PairingSpec extends ZIOSpecDefault:
 
   private def mkPairing(numMatches: Int, outcomes: Vector[Option[GameOutcome]] = Vector.empty) =
     val matches = (0 until numMatches).toVector.map: i =>
-      Match(GameId(s"g$i"), outcomes.lift(i).flatten, None)
+      Match(GameId(s"g$i"), bot1.id, outcomes.lift(i).flatten, None)
     Pairing(bot1, bot2, matches, None)
 
   def spec = suite("Pairing")(
@@ -74,6 +74,27 @@ object PairingSpec extends ZIOSpecDefault:
           Some(GameOutcome.White), Some(GameOutcome.Black), Some(GameOutcome.Black),
         ))
         assertTrue(p.earlyWinner(5).contains(GameOutcome.Black))
+      },
+    ),
+    suite("reversed colours")(
+      test("earlyWinner normalises a reversed-colour game to the nominal white") {
+        // bot1 is the pairing's nominal white. g1: bot1 plays white and wins
+        // (White). g2: colours reversed, so bot2 is white and bot1 (black) wins
+        // — recorded as Black but credited to the nominal white. So bot1 wins 2-0.
+        val matches = Vector(
+          Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None),
+          Match(GameId("g2"), bot2.id, Some(GameOutcome.Black), None),
+        )
+        val p = Pairing(bot1, bot2, matches, None)
+        assertTrue(p.earlyWinner(2).contains(GameOutcome.White))
+      },
+      test("earlyWinner keeps a reversed draw as a draw") {
+        val matches = Vector(
+          Match(GameId("g1"), bot1.id, Some(GameOutcome.Draw), None),
+          Match(GameId("g2"), bot2.id, Some(GameOutcome.Draw), None),
+        )
+        val p = Pairing(bot1, bot2, matches, None)
+        assertTrue(p.earlyWinner(2).contains(GameOutcome.Draw))
       },
     ),
     suite("recordResult")(

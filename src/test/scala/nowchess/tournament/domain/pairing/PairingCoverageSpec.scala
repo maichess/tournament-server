@@ -16,8 +16,8 @@ object PairingCoverageSpec extends ZIOSpecDefault:
     suite("EliminationBracket")(
       test("advancingPairings with completed round") {
         val round = Round(1, Vector(
-          Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.White), None)), Some(GameOutcome.White)),
-          Pairing(bot3, bot4, Vector(Match(GameId("g2"), Some(GameOutcome.Black), None)), Some(GameOutcome.Black)),
+          Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None)), Some(GameOutcome.White)),
+          Pairing(bot3, bot4, Vector(Match(GameId("g2"), bot3.id, Some(GameOutcome.Black), None)), Some(GameOutcome.Black)),
         ))
         val result = EliminationBracket.advancingPairings(Vector(round))
         assertTrue(result.length == 1) &&
@@ -25,8 +25,8 @@ object PairingCoverageSpec extends ZIOSpecDefault:
       },
       test("advancingPairings with draw advances white") {
         val round = Round(1, Vector(
-          Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.Draw), None)), Some(GameOutcome.Draw)),
-          Pairing(bot3, bot4, Vector(Match(GameId("g2"), Some(GameOutcome.White), None)), Some(GameOutcome.White)),
+          Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.Draw), None)), Some(GameOutcome.Draw)),
+          Pairing(bot3, bot4, Vector(Match(GameId("g2"), bot3.id, Some(GameOutcome.White), None)), Some(GameOutcome.White)),
         ))
         val result = EliminationBracket.advancingPairings(Vector(round))
         assertTrue(result.length == 1) &&
@@ -38,15 +38,15 @@ object PairingCoverageSpec extends ZIOSpecDefault:
       },
       test("advancingPairings with no completed pairings") {
         val round = Round(1, Vector(
-          Pairing(bot1, bot2, Vector(Match(GameId("g1"), None, None)), None),
+          Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, None, None)), None),
         ))
         val result = EliminationBracket.advancingPairings(Vector(round))
         assertTrue(result.isEmpty)
       },
       test("pair round > 1 uses advancingPairings") {
         val round = Round(1, Vector(
-          Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.White), None)), Some(GameOutcome.White)),
-          Pairing(bot3, bot4, Vector(Match(GameId("g2"), Some(GameOutcome.Black), None)), Some(GameOutcome.Black)),
+          Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None)), Some(GameOutcome.White)),
+          Pairing(bot3, bot4, Vector(Match(GameId("g2"), bot3.id, Some(GameOutcome.Black), None)), Some(GameOutcome.Black)),
         ))
         val result = EliminationBracket.pair(Vector(bot1, bot2, bot3, bot4), Vector.empty, Vector(round), 2)
         assertTrue(result.length == 1)
@@ -73,7 +73,7 @@ object PairingCoverageSpec extends ZIOSpecDefault:
       },
       test("knockout round > 1 uses elimination advancing") {
         val round = Round(1, Vector(
-          Pairing(bot1, bot2, Vector(Match(GameId("g1"), Some(GameOutcome.White), None)), Some(GameOutcome.White)),
+          Pairing(bot1, bot2, Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None)), Some(GameOutcome.White)),
         ))
         // groupPhaseRounds for size=2 = 1. knockoutRound = roundNumber - 1 = 5 - 1 = 4
         // For knockoutRound > 1, uses EliminationBracket.advancingPairings
@@ -99,25 +99,25 @@ object PairingCoverageSpec extends ZIOSpecDefault:
       test("earlyWinner with all matches complete and draw tiebreak") {
         // matchesPerPairing=2, both draw → equal wins → Draw
         val p = Pairing(bot1, bot2,
-          Vector(Match(GameId("g1"), Some(GameOutcome.Draw), None), Match(GameId("g2"), Some(GameOutcome.Draw), None)),
+          Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.Draw), None), Match(GameId("g2"), bot1.id, Some(GameOutcome.Draw), None)),
           None)
         assertTrue(p.earlyWinner(2).contains(GameOutcome.Draw))
       },
       test("earlyWinner with all matches complete and white more wins") {
         val p = Pairing(bot1, bot2,
-          Vector(Match(GameId("g1"), Some(GameOutcome.White), None), Match(GameId("g2"), Some(GameOutcome.Draw), None)),
+          Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None), Match(GameId("g2"), bot1.id, Some(GameOutcome.Draw), None)),
           None)
         assertTrue(p.earlyWinner(2).contains(GameOutcome.White))
       },
       test("earlyWinner with all matches complete and black more wins") {
         val p = Pairing(bot1, bot2,
-          Vector(Match(GameId("g1"), Some(GameOutcome.Black), None), Match(GameId("g2"), Some(GameOutcome.Black), None)),
+          Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.Black), None), Match(GameId("g2"), bot1.id, Some(GameOutcome.Black), None)),
           None)
         assertTrue(p.earlyWinner(2).contains(GameOutcome.Black))
       },
       test("earlyWinner returns None when matches incomplete") {
         val p = Pairing(bot1, bot2,
-          Vector(Match(GameId("g1"), Some(GameOutcome.White), None), Match(GameId("g2"), None, None)),
+          Vector(Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None), Match(GameId("g2"), bot1.id, None, None)),
           None)
         assertTrue(p.earlyWinner(3).isEmpty)
       },
@@ -125,20 +125,20 @@ object PairingCoverageSpec extends ZIOSpecDefault:
         // matchesPerPairing=4, needed=2. White=1, Black=0, Draw=3. All complete, no early winner.
         val p = Pairing(bot1, bot2,
           Vector(
-            Match(GameId("g1"), Some(GameOutcome.White), None),
-            Match(GameId("g2"), Some(GameOutcome.Draw), None),
-            Match(GameId("g3"), Some(GameOutcome.Draw), None),
-            Match(GameId("g4"), Some(GameOutcome.Draw), None),
+            Match(GameId("g1"), bot1.id, Some(GameOutcome.White), None),
+            Match(GameId("g2"), bot1.id, Some(GameOutcome.Draw), None),
+            Match(GameId("g3"), bot1.id, Some(GameOutcome.Draw), None),
+            Match(GameId("g4"), bot1.id, Some(GameOutcome.Draw), None),
           ), None)
         assertTrue(p.earlyWinner(4).contains(GameOutcome.White))
       },
       test("earlyWinner all complete no early win - black leads") {
         val p = Pairing(bot1, bot2,
           Vector(
-            Match(GameId("g1"), Some(GameOutcome.Black), None),
-            Match(GameId("g2"), Some(GameOutcome.Draw), None),
-            Match(GameId("g3"), Some(GameOutcome.Draw), None),
-            Match(GameId("g4"), Some(GameOutcome.Draw), None),
+            Match(GameId("g1"), bot1.id, Some(GameOutcome.Black), None),
+            Match(GameId("g2"), bot1.id, Some(GameOutcome.Draw), None),
+            Match(GameId("g3"), bot1.id, Some(GameOutcome.Draw), None),
+            Match(GameId("g4"), bot1.id, Some(GameOutcome.Draw), None),
           ), None)
         assertTrue(p.earlyWinner(4).contains(GameOutcome.Black))
       },

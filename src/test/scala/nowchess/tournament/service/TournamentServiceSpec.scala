@@ -24,7 +24,7 @@ object TournamentServiceSpec extends ZIOSpecDefault:
     InMemoryGameRepository.layer ++
     StreamServiceLive.layer ++
     (InMemoryOpeningRepository.layer >>> OpeningServiceLive.layer) ++
-    (InMemoryBotRegistryRepository.layer >>> BotRegistryServiceLive.layer) >>>
+    ServiceTestLayers.botRegistry >>>
     TournamentServiceLive.layer
 
   def spec = suite("TournamentService")(

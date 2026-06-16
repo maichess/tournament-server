@@ -114,10 +114,8 @@ final class GameServiceLive(
       val roundNum = advanced.currentRound
       val pairings = algorithm.pair(advanced.participants, standings, advanced.rounds, roundNum)
       ZIO.foreach(pairings)(createGamesForPairing(advanced, roundNum, _)).flatMap: games =>
-        val roundPairings = games.map((pair, gameIds) =>
-          Pairing(pair._1, pair._2,
-            gameIds.map(gid => Match(gid, None, None)),
-            None))
+        val roundPairings = games.map((pair, matches) =>
+          Pairing(pair._1, pair._2, matches, None))
         val round = Round(roundNum, roundPairings)
         ZIO.fromEither(TournamentLifecycle.addRound(advanced, round)).flatMap: withRound =>
           tournamentRepo.save(withRound) *>
@@ -137,20 +135,8 @@ final class GameServiceLive(
     tournament: Tournament,
     roundNum: Int,
     pair: (BotRef, BotRef),
-  ): Task[((BotRef, BotRef), Vector[GameId])] =
-    val (white, black) = pair
-    ZIO.foreach((1 to tournament.config.matchesPerPairing).toVector): _ =>
-      val gameId = GameId(java.util.UUID.randomUUID().toString.take(8))
-      val fen = tournament.config.startPosition.toFen
-      val game = Game(
-        id = gameId, tournamentId = tournament.id, round = roundNum,
-        white = white, black = black, moves = Vector.empty,
-        status = GameStatus.Pending, turn = Color.White, winner = None,
-        clock = GameClock(tournament.config.clock.limit.toDouble, tournament.config.clock.limit.toDouble),
-        startPosition = tournament.config.startPosition, fen = fen,
-      )
-      gameRepo.save(game).as(gameId)
-    .map(ids => (pair, ids))
+  ): Task[((BotRef, BotRef), Vector[Match])] =
+    GameFactory.create(tournament, roundNum, pair, gameRepo).map(matches => (pair, matches))
 
 object GameServiceLive:
   val layer: URLayer[GameRepository & TournamentRepository & StreamService, GameService] =

@@ -147,8 +147,9 @@ object ModelSpec extends ZIOSpecDefault:
     suite("Match")(
       test("constructs correctly") {
         import nowchess.tournament.domain.round.Match
-        val m = Match(GameId("g1"), Some(GameOutcome.White), Some("e2e4"))
+        val m = Match(GameId("g1"), BotId("w"), Some(GameOutcome.White), Some("e2e4"))
         assertTrue(m.gameId == GameId("g1")) &&
+        assertTrue(m.whiteId == BotId("w")) &&
         assertTrue(m.outcome.contains(GameOutcome.White)) &&
         assertTrue(m.moves.contains("e2e4"))
       },
