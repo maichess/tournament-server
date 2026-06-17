@@ -64,6 +64,7 @@ object TournamentLifecycle:
     else
       Right(tournament.copy(
         status = TournamentStatus.Finished,
+        finishedAt = Some(Instant.now()),
         winner = Some(winner),
       ))
 

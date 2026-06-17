@@ -11,6 +11,7 @@ import nowchess.tournament.domain.lifecycle.TournamentLifecycle
 import nowchess.tournament.domain.standing.ScoringRules
 import nowchess.tournament.domain.pairing.*
 import nowchess.tournament.persistence.{TournamentRepository, GameRepository}
+import java.time.Instant
 
 trait GameService:
   def getGame(gameId: GameId): Task[Game]
@@ -44,12 +45,14 @@ final class GameServiceLive(
       newBoard <- ZIO.fromEither(ChessRules.applyMove(board, move)).mapError(e => DomainError.BadRequest(e))
       newFen = ChessRules.boardToFen(newBoard)
       (newStatus, winner) = determineStatus(newBoard)
+      now = Instant.now()
       updatedGame = game.copy(
         moves = game.moves :+ uci,
         fen = newFen,
         turn = game.turn.opposite,
         status = newStatus,
         winner = winner,
+        endedAt = if newStatus.isTerminal then Some(now) else None,
       )
       _ <- gameRepo.save(updatedGame)
       _ <- publishMoveEvent(gameId, uci, newFen, updatedGame)

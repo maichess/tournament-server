@@ -9,8 +9,12 @@ import nowchess.tournament.domain.standing.{Standing, Result}
 import nowchess.tournament.domain.game.{Game, GameStatus, GameClock}
 import nowchess.tournament.domain.event.{TournamentEvent, GameEvent}
 import nowchess.tournament.domain.error.DomainError
+import java.time.Instant
 
 object JsonCodecs:
+
+  // --- Instant codec (ISO-8601 string) ---
+  given JsonEncoder[Instant] = JsonEncoder[String].contramap(_.toString)
 
   // --- Opaque type codecs ---
   given JsonEncoder[TournamentId] = JsonEncoder[String].contramap(_.value)
@@ -149,6 +153,8 @@ object JsonCodecs:
       "winner" -> g.winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
       "clock" -> Obj("whiteTime" -> Num(g.clock.whiteTime), "blackTime" -> Num(g.clock.blackTime)),
       "startPosition" -> Str(g.startPosition match { case StartPosition.Standard => "standard"; case StartPosition.FromFen(f) => f }),
+      "startedAt" -> g.startedAt.map(i => Str(i.toString)).getOrElse(Null),
+      "endedAt" -> g.endedAt.map(i => Str(i.toString)).getOrElse(Null),
     )
 
   // --- Event codecs ---
@@ -220,6 +226,67 @@ object JsonCodecs:
     winner: Option[String], moves: String,
   )
   given JsonEncoder[GameExportJson] = DeriveJsonEncoder.gen[GameExportJson]
+
+  // Analytics export DTOs — no analytics computed here, only raw data assembly
+  final case class AnalyticsExportGame(
+    gameId: String,
+    tournamentId: String,
+    round: Int,
+    whiteBotId: String,
+    whiteBotName: String,
+    whiteBotFamily: Option[String],
+    whiteStrategyType: Option[String],
+    whiteEngineType: Option[String],
+    whiteModelVersion: Option[String],
+    blackBotId: String,
+    blackBotName: String,
+    blackBotFamily: Option[String],
+    blackStrategyType: Option[String],
+    blackEngineType: Option[String],
+    blackModelVersion: Option[String],
+    winner: Option[String],
+    winnerBotId: Option[String],
+    terminationReason: String,
+    totalPly: Int,
+    moves: String,
+    startedAt: Option[String],
+    endedAt: Option[String],
+    durationMillis: Option[Long],
+  )
+  given JsonEncoder[AnalyticsExportGame] = DeriveJsonEncoder.gen[AnalyticsExportGame]
+
+  final case class AnalyticsExportStanding(
+    tournamentId: String,
+    botId: String,
+    botName: String,
+    botFamily: Option[String],
+    strategyType: Option[String],
+    engineType: Option[String],
+    modelVersion: Option[String],
+    rank: Int,
+    points: Double,
+    wins: Int,
+    draws: Int,
+    losses: Int,
+    nbGames: Int,
+    tieBreak: Double,
+  )
+  given JsonEncoder[AnalyticsExportStanding] = DeriveJsonEncoder.gen[AnalyticsExportStanding]
+
+  final case class AnalyticsExportResponse(
+    schemaVersion: String,
+    tournamentId: String,
+    format: String,
+    clock: Clock,
+    rated: Boolean,
+    nbRounds: Int,
+    startedAt: Option[String],
+    finishedAt: Option[String],
+    exportedAt: String,
+    standings: Vector[AnalyticsExportStanding],
+    games: Vector[AnalyticsExportGame],
+  )
+  given JsonEncoder[AnalyticsExportResponse] = DeriveJsonEncoder.gen[AnalyticsExportResponse]
 
 private object ScoringRulesHelper:
   import nowchess.tournament.domain.standing.{ScoringRules, Result}
