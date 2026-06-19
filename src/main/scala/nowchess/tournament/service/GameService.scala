@@ -39,22 +39,70 @@ final class GameServiceLive(
       _    <- ZIO.when(game.status.isTerminal)(ZIO.fail(DomainError.Conflict("game already finished")))
       _    <- ZIO.when(game.status == GameStatus.Pending)(ZIO.fail(DomainError.Conflict("game not active")))
       _    <- ZIO.when(game.currentPlayer.id != botId)(ZIO.fail(DomainError.Forbidden("not your turn")))
+      now  <- zio.Clock.instant
       move <- ZIO.fromEither(ChessRules.parseUci(uci)).mapError(e => DomainError.BadRequest(e))
       board <- ZIO.fromEither(ChessRules.parseFen(game.fen)).mapError(e => DomainError.BadRequest(e))
       newBoard <- ZIO.fromEither(ChessRules.applyMove(board, move)).mapError(e => DomainError.BadRequest(e))
       newFen = ChessRules.boardToFen(newBoard)
       (newStatus, winner) = determineStatus(newBoard)
+      newClock = updateClock(game, now)
+      (finalStatus, finalWinner) = if newClock.timeForTurn(game.turn) <= 0 then
+        (GameStatus.Timeout, Some(game.turn.opposite))
+      else (newStatus, winner)
       updatedGame = game.copy(
         moves = game.moves :+ uci,
         fen = newFen,
         turn = game.turn.opposite,
-        status = newStatus,
-        winner = winner,
+        status = finalStatus,
+        winner = finalWinner,
+        clock = newClock,
+        lastMoveAt = now,
       )
       _ <- gameRepo.save(updatedGame)
       _ <- publishMoveEvent(gameId, uci, newFen, updatedGame)
-      _ <- ZIO.when(newStatus.isTerminal)(handleGameEnd(updatedGame))
+      _ <- ZIO.when(finalStatus.isTerminal)(handleGameEnd(updatedGame))
     yield updatedGame
+
+  private def updateClock(game: Game, now: java.time.Instant): GameClock =
+    val elapsed = if game.lastMoveAt == java.time.Instant.EPOCH then 0.0
+      else java.time.Duration.between(game.lastMoveAt, now).toMillis / 1000.0
+    val inc = game.clock.increment.toDouble
+    game.turn match
+      case Color.White =>
+        game.clock.copy(whiteTime = math.max(0, game.clock.whiteTime - elapsed + inc))
+      case Color.Black =>
+        game.clock.copy(blackTime = math.max(0, game.clock.blackTime - elapsed + inc))
+
+  def startTimeoutDaemon: UIO[Fiber.Runtime[Throwable, Nothing]] =
+    val loop = for
+      tournamentsMap <- tournamentRepo.listByStatus.orDie
+      startedTournaments = tournamentsMap.getOrElse(TournamentStatus.Started, Vector.empty)
+      _ <- ZIO.foreachDiscard(startedTournaments): tournament =>
+        for
+          games <- gameRepo.findByTournament(tournament.id).orDie
+          ongoingGames = games.filter(_.status == GameStatus.Ongoing)
+          now <- zio.Clock.instant
+          _ <- ZIO.foreachDiscard(ongoingGames): game =>
+            val elapsed = if game.lastMoveAt == java.time.Instant.EPOCH then 0.0
+              else java.time.Duration.between(game.lastMoveAt, now).toMillis / 1000.0
+            val remaining = game.clock.timeForTurn(game.turn) - elapsed
+            ZIO.when(remaining <= 0)(timeoutGame(game).catchAll(e => ZIO.logError(s"Failed to timeout game ${game.id}: $e")))
+        yield ()
+    yield ()
+    (loop *> ZIO.sleep(1.second)).forever.forkDaemon
+
+  private def timeoutGame(game: Game): Task[Unit] =
+    val loser = game.turn
+    val winner = loser.opposite
+    val updatedClock = loser match
+      case Color.White => game.clock.copy(whiteTime = 0)
+      case Color.Black => game.clock.copy(blackTime = 0)
+    val updatedGame = game.copy(
+      status = GameStatus.Timeout,
+      winner = Some(winner),
+      clock = updatedClock,
+    )
+    gameRepo.save(updatedGame) *> handleGameEnd(updatedGame)
 
   private def determineStatus(board: ChessRules.Board): (GameStatus, Option[Color]) =
     if ChessRules.isCheckmate(board) then
@@ -145,4 +193,6 @@ object GameServiceLive:
         gameRepo <- ZIO.service[GameRepository]
         tournamentRepo <- ZIO.service[TournamentRepository]
         stream <- ZIO.service[StreamService]
-      yield GameServiceLive(gameRepo, tournamentRepo, stream)
+        service = GameServiceLive(gameRepo, tournamentRepo, stream)
+        _ <- service.startTimeoutDaemon
+      yield service

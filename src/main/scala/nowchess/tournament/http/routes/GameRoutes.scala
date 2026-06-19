@@ -3,6 +3,7 @@ package nowchess.tournament.http.routes
 import zio.*
 import zio.http.*
 import zio.json.*
+import zio.stream.ZStream
 import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.event.GameEvent
 import nowchess.tournament.service.*
@@ -31,12 +32,19 @@ object GameRoutes:
       _ <- AuthMiddleware.extractAuth(req)
       stream <- StreamService.subscribeGame(GameId(gameId))
       game <- GameService.getGame(GameId(gameId))
-      snapshot = GameEvent.GameState(game.fen, game.movesUci, game.turn, game.clock, game.status, game.winner)
-      events = zio.stream.ZStream.succeed(snapshot) ++ stream
-      body = Body.fromStreamChunked(events.mapConcatChunk(e => zio.Chunk.fromArray((e.toJson + "\n").getBytes)))
+      initialEvent = GameEvent.GameState(game.fen, game.movesUci, game.turn, game.clock, game.status, game.winner)
+      fullStream = ZStream.succeed(initialEvent) ++ stream
+      stringStream = fullStream.map(e => e.toJson + "\n")
+      heartbeatStream = ZStream.tick(10.seconds).map(_ => "\n")
+      combinedStream = stringStream.merge(heartbeatStream)
+      body = Body.fromStreamChunked(combinedStream.mapConcatChunk(s => zio.Chunk.fromArray(s.getBytes)))
     yield Response(
       status = Status.Ok,
-      headers = Headers(Header.ContentType(MediaType("application", "x-ndjson"))),
+      headers = Headers(
+        Header.ContentType(MediaType("application", "x-ndjson")),
+        Header.Custom("Cache-Control", "no-cache"),
+        Header.Custom("Connection", "keep-alive")
+      ),
       body = body,
     )).catchAll(e => ZIO.succeed(TournamentRoutes.errorToResponse(e)))
 
