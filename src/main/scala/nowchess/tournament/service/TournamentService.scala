@@ -1,17 +1,13 @@
 package nowchess.tournament.service
 
 import zio.*
-import nowchess.tournament.domain.model.{TournamentId, BotId, UserId, BotRef, GameId, Color, GameOutcome, StartPosition, Clock as DomainClock}
+import nowchess.tournament.domain.model.{TournamentId, BotId, UserId, BotRef, StartPosition, Clock as DomainClock}
 import nowchess.tournament.domain.tournament.*
 import nowchess.tournament.domain.round.*
-import nowchess.tournament.domain.game.*
 import nowchess.tournament.domain.error.DomainError
 import nowchess.tournament.domain.event.TournamentEvent
 import nowchess.tournament.domain.lifecycle.TournamentLifecycle
-import nowchess.tournament.domain.standing.ScoringRules
-import nowchess.tournament.domain.pairing.*
 import nowchess.tournament.persistence.{TournamentRepository, GameRepository}
-import java.time.Instant
 
 final case class CreateTournamentForm(
   name: String,
@@ -144,9 +140,9 @@ final class TournamentServiceLive(
       _ <- ZIO.when(t.director != director)(ZIO.fail(DomainError.Forbidden("not the director")))
       now <- zio.Clock.instant
       started <- ZIO.fromEither(TournamentLifecycle.start(t, now))
-      algorithm = selectAlgorithm(started)
+      algorithm = GameFactory.selectAlgorithm(started)
       pairings = algorithm.pair(started.participants, Vector.empty, Vector.empty, 1)
-      games <- ZIO.foreach(pairings)(createGamesForPairing(started, 1, _))
+      games <- ZIO.foreach(pairings)(GameFactory.createForPairing(started, 1, _, gameRepo))
       roundPairings = games.map((pair, matches) =>
         Pairing(pair._1, pair._2, matches, None))
       round = Round(1, roundPairings)
@@ -172,21 +168,6 @@ final class TournamentServiceLive(
     get(id).flatMap: t =>
       ZIO.fromEither(TournamentLifecycle.withdraw(t, botId)).flatMap(repo.save)
 
-  private def selectAlgorithm(tournament: Tournament): PairingAlgorithm =
-    tournament.config.format match
-      case TournamentFormat.Swiss             => SwissPairing
-      case TournamentFormat.SingleElimination => EliminationBracket
-      case TournamentFormat.DoubleElimination => EliminationBracket
-      case TournamentFormat.GroupStage(_)     => GroupStagePairing
-      case TournamentFormat.League            => RoundRobinPairing
-      case TournamentFormat.RandomKnockout    => RandomKnockoutPairing(tournament.seed)
-
-  private def createGamesForPairing(
-    tournament: Tournament,
-    roundNum: Int,
-    pair: (BotRef, BotRef),
-  ): Task[((BotRef, BotRef), Vector[Match])] =
-    GameFactory.create(tournament, roundNum, pair, gameRepo).map(matches => (pair, matches))
 
 object TournamentServiceLive:
   val layer: URLayer[TournamentRepository & GameRepository & StreamService & OpeningService & BotRegistryService, TournamentService] =

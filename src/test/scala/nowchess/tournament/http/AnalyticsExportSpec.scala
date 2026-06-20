@@ -275,6 +275,27 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
       )
     },
 
+    test("tournament cancelled before start returns 409") {
+      for
+        createRes <- allRoutes.runZIO(
+          Request.post(
+            URL(Path.root / "api" / "tournament"),
+            Body.fromString(createTournamentBody(nbRounds = 1)),
+          ).addHeaders(authHeader("director-token"))
+        )
+        body <- createRes.body.asString
+        id    = extractId(body)
+        // Delete the tournament before starting it (terminate)
+        _ <- allRoutes.runZIO(
+          Request.delete(URL(Path.root / "api" / "tournament" / id))
+            .addHeaders(authHeader("director-token"))
+        )
+        response <- allRoutes.runZIO(
+          Request.get(URL(Path.root / "api" / "tournament" / id / "analytics-export"))
+        )
+      yield assertTrue(response.status == Status.Conflict)
+    },
+
     test("existing /export/games endpoint still works after changes") {
       for
         id       <- createAndFinishTournament
@@ -308,7 +329,7 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
         exportedAt = json.asObject.flatMap(_.get("exportedAt")).flatMap(_.asString)
       yield assertTrue(
         exportedAt.isDefined,
-        exportedAt.exists(_.startsWith("20")),
+        exportedAt.exists(_.contains("T")),
       )
     },
 

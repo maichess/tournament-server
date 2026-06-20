@@ -145,13 +145,14 @@ object TournamentLifecycleSpec extends ZIOSpecDefault:
     ),
     suite("finish")(
       test("succeeds when started") {
-        val result = TournamentLifecycle.finish(startedTournament, bot1)
+        val result = TournamentLifecycle.finish(startedTournament, bot1, now)
         assertTrue(result.isRight) &&
         assertTrue(result.toOption.get.status == TournamentStatus.Finished) &&
-        assertTrue(result.toOption.get.winner.contains(bot1))
+        assertTrue(result.toOption.get.winner.contains(bot1)) &&
+        assertTrue(result.toOption.get.finishedAt.contains(now))
       },
       test("fails when not started") {
-        val result = TournamentLifecycle.finish(freshTournament, bot1)
+        val result = TournamentLifecycle.finish(freshTournament, bot1, now)
         assertTrue(result == Left(DomainError.Conflict("tournament not started")))
       },
     ),

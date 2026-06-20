@@ -1320,6 +1320,12 @@ components:
           example: 0
         nbGames:
           type: integer
+          description: >
+            Number of pairings (match-ups) completed by this bot. For
+            tournaments using a multi-position opening book each pairing
+            produces `matchesPerPairing` individual game records in the
+            `games` array, so `nbGames` counts opponents faced, not total
+            games played.
           example: 4
         tieBreak:
           type: number

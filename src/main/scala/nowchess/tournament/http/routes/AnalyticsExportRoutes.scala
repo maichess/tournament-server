@@ -3,7 +3,6 @@ package nowchess.tournament.http.routes
 import zio.*
 import zio.http.*
 import zio.json.*
-import java.time.Instant
 import nowchess.tournament.domain.model.*
 import nowchess.tournament.domain.game.GameStatus
 import nowchess.tournament.domain.tournament.TournamentStatus
@@ -27,13 +26,18 @@ object AnalyticsExportRoutes:
       _ <- ZIO.when(tournament.status != TournamentStatus.Finished)(
         ZIO.fail(DomainError.Conflict("tournament is not finished yet"))
       )
+      _ <- ZIO.when(tournament.startedAt.isEmpty)(
+        ZIO.fail(DomainError.Conflict("tournament was cancelled before it started and has no analytics data"))
+      )
       games    <- GameRepository.findByTournament(TournamentId(id))
-      allBots  <- BotRegistryService.list
-      botMap    = allBots.map(b => b.id -> b).toMap
+      // Only fetch metadata for bots that participated; the full registry may be large.
+      participantIds = tournament.participants.map(_.id)
+      botEntries <- ZIO.foreach(participantIds)(BotRegistryService.get)
+      botMap      = botEntries.flatten.map(b => b.id -> b).toMap
       standings = ScoringRules.computeStandings(tournament)
+      exportedAt <- zio.Clock.instant
 
-      formatStr = summon[JsonEncoder[nowchess.tournament.domain.tournament.TournamentFormat]]
-        .encodeJson(tournament.config.format).toString.stripPrefix("\"").stripSuffix("\"")
+      formatStr = encodeAsString(tournament.config.format)
 
       exportGames = games.map: g =>
         val whiteMeta = botMap.get(g.white.id)
@@ -60,8 +64,7 @@ object AnalyticsExportRoutes:
           blackModelVersion = blackMeta.flatMap(_.modelVersion),
           winner            = winnerColor.orElse(if g.status.isTerminal then Some("draw") else None),
           winnerBotId       = winnerBotId,
-          terminationReason = summon[JsonEncoder[GameStatus]]
-            .encodeJson(g.status).toString.stripPrefix("\"").stripSuffix("\""),
+          terminationReason = encodeAsString(g.status),
           totalPly          = g.moves.size,
           moves             = g.movesUci,
           startedAt         = g.startedAt.map(_.toString),
@@ -97,7 +100,7 @@ object AnalyticsExportRoutes:
         nbRounds      = tournament.config.nbRounds,
         startedAt     = tournament.startedAt.map(_.toString),
         finishedAt    = tournament.finishedAt.map(_.toString),
-        exportedAt    = Instant.now().toString,
+        exportedAt    = exportedAt.toString,
         standings     = exportStandings,
         games         = exportGames,
       )

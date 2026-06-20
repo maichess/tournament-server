@@ -13,6 +13,10 @@ import java.time.Instant
 
 object JsonCodecs:
 
+  /** Encodes a JSON-enum value to its bare string form (no surrounding quotes). */
+  def encodeAsString[A: JsonEncoder](a: A): String =
+    summon[JsonEncoder[A]].encodeJson(a).toString.stripPrefix("\"").stripSuffix("\"")
+
   // --- Instant codec (ISO-8601 string) ---
   given JsonEncoder[Instant] = JsonEncoder[String].contramap(_.toString)
 
@@ -127,11 +131,11 @@ object JsonCodecs:
       "rated" -> Bool(t.config.rated),
       "nbPlayers" -> Num(t.participants.size),
       "nbRounds" -> Num(t.config.nbRounds),
-      "format" -> Str(summon[JsonEncoder[TournamentFormat]].encodeJson(t.config.format).toString.stripPrefix("\"").stripSuffix("\"")),
+      "format" -> Str(encodeAsString(t.config.format)),
       "matchesPerPairing" -> Num(t.config.matchesPerPairing),
       "startPosition" -> Str(t.config.startPosition match { case StartPosition.Standard => "standard"; case StartPosition.FromFen(f) => f }),
       "createdBy" -> Str(t.director.value),
-      "status" -> Str(summon[JsonEncoder[TournamentStatus]].encodeJson(t.status).toString.stripPrefix("\"").stripSuffix("\"")),
+      "status" -> Str(encodeAsString(t.status)),
       "round" -> Num(t.currentRound),
       "standing" -> Standing(1, ScoringRulesHelper.compute(t)).toJsonAST.getOrElse(Null),
       "winner" -> t.winner.map(b => b.toJsonAST.getOrElse(Null)).getOrElse(Null),
@@ -148,7 +152,7 @@ object JsonCodecs:
       "black" -> g.black.toJsonAST.getOrElse(Null),
       "moves" -> Str(g.movesUci),
       "fen" -> Str(g.fen),
-      "status" -> Str(summon[JsonEncoder[GameStatus]].encodeJson(g.status).toString.stripPrefix("\"").stripSuffix("\"")),
+      "status" -> Str(encodeAsString(g.status)),
       "turn" -> Str(if g.turn == Color.White then "white" else "black"),
       "winner" -> g.winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
       "clock" -> Obj("whiteTime" -> Num(g.clock.whiteTime), "blackTime" -> Num(g.clock.blackTime)),
@@ -182,7 +186,7 @@ object JsonCodecs:
         "type" -> Str("gameState"), "fen" -> Str(fen), "moves" -> Str(moves),
         "turn" -> Str(if turn == Color.White then "white" else "black"),
         "clock" -> Obj("whiteTime" -> Num(clock.whiteTime), "blackTime" -> Num(clock.blackTime)),
-        "status" -> Str(summon[JsonEncoder[GameStatus]].encodeJson(status).toString.stripPrefix("\"").stripSuffix("\"")),
+        "status" -> Str(encodeAsString(status)),
         "winner" -> winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
       )
     case GameEvent.MovePlayed(uci, fen, turn, clock) =>
@@ -197,7 +201,7 @@ object JsonCodecs:
       Obj(
         "type" -> Str("gameEnd"),
         "winner" -> winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
-        "status" -> Str(summon[JsonEncoder[GameStatus]].encodeJson(status).toString.stripPrefix("\"").stripSuffix("\"")),
+        "status" -> Str(encodeAsString(status)),
       )
 
   // --- Error codec ---

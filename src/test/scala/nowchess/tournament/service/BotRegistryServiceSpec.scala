@@ -74,4 +74,14 @@ object BotRegistryServiceSpec extends ZIOSpecDefault:
         found <- svc.get(bot.id)
       yield assertTrue(found.isEmpty)
     },
+    test("re-registering the same name preserves existing metadata") {
+      for
+        svc  <- ZIO.service[BotRegistryService]
+        orig <- svc.register("Stable", None, engineType = Some("heuristic"))
+        again <- svc.register("Stable", None)
+      yield assertTrue(
+        orig.id == again.id,
+        again.engineType.contains("heuristic"),
+      )
+    },
   ).provide(layer)

@@ -46,23 +46,27 @@ final class BotRegistryServiceLive(repo: BotRegistryRepository, authService: Aut
     modelVersion: Option[String] = None,
   ): Task[RegisteredBot] =
     for
-      _  <- ZIO.when(name.isBlank)(ZIO.fail(DomainError.BadRequest("name must not be blank")))
-      // Back the registry entry with a bot auth identity so its id lives in the
-      // same space as JWT subjects. A client that can mint a token for this name
-      // (idempotent /api/auth/register) can then drive the bot's moves after it
-      // is added to a tournament via /participants. Registering the same name
-      // again resolves to the same identity, so registration is idempotent.
+      _        <- ZIO.when(name.isBlank)(ZIO.fail(DomainError.BadRequest("name must not be blank")))
+      // Back the registry entry with an auth identity so its id lives in the same
+      // space as JWT subjects. authService.register is idempotent: same name →
+      // same id. We honour that contract by also making the registry write a
+      // no-op for an already-registered bot, so metadata set at first registration
+      // is never silently overwritten by a repeat call with fewer fields.
       identity <- authService.register(name.trim, isBot = true)
-      bot = RegisteredBot(
-        BotId(identity.id),
-        name.trim,
-        endpoint.map(_.trim).filter(_.nonEmpty),
-        family.map(_.trim).filter(_.nonEmpty),
-        strategyType.map(_.trim).filter(_.nonEmpty),
-        engineType.map(_.trim).filter(_.nonEmpty),
-        modelVersion.map(_.trim).filter(_.nonEmpty),
-      )
-      _  <- repo.save(bot)
+      existing <- repo.get(BotId(identity.id))
+      bot      <- existing match
+        case Some(b) => ZIO.succeed(b)
+        case None    =>
+          val newBot = RegisteredBot(
+            BotId(identity.id),
+            name.trim,
+            endpoint.map(_.trim).filter(_.nonEmpty),
+            family.map(_.trim).filter(_.nonEmpty),
+            strategyType.map(_.trim).filter(_.nonEmpty),
+            engineType.map(_.trim).filter(_.nonEmpty),
+            modelVersion.map(_.trim).filter(_.nonEmpty),
+          )
+          repo.save(newBot).as(newBot)
     yield bot
 
   override def list: Task[Vector[RegisteredBot]] =
