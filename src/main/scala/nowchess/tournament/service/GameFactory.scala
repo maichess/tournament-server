@@ -4,7 +4,8 @@ import zio.*
 import nowchess.tournament.domain.model.{BotRef, Color, GameId}
 import nowchess.tournament.domain.game.{Game, GameStatus, GameClock}
 import nowchess.tournament.domain.round.Match
-import nowchess.tournament.domain.tournament.Tournament
+import nowchess.tournament.domain.tournament.{Tournament, TournamentFormat}
+import nowchess.tournament.domain.pairing.*
 import nowchess.tournament.persistence.GameRepository
 
 /** Creates the games of a pairing from the tournament config (single position
@@ -14,6 +15,23 @@ import nowchess.tournament.persistence.GameRepository
   * the colour/position policy lives in one place.
   */
 object GameFactory:
+
+  def selectAlgorithm(tournament: Tournament): PairingAlgorithm =
+    tournament.config.format match
+      case TournamentFormat.Swiss             => SwissPairing
+      case TournamentFormat.SingleElimination => EliminationBracket
+      case TournamentFormat.DoubleElimination => EliminationBracket
+      case TournamentFormat.GroupStage(_)     => GroupStagePairing
+      case TournamentFormat.League            => RoundRobinPairing
+      case TournamentFormat.RandomKnockout    => RandomKnockoutPairing(tournament.seed)
+
+  def createForPairing(
+    tournament: Tournament,
+    roundNum: Int,
+    pair: (BotRef, BotRef),
+    gameRepo: GameRepository,
+  ): Task[((BotRef, BotRef), Vector[Match])] =
+    create(tournament, roundNum, pair, gameRepo).map(matches => (pair, matches))
 
   def create(
     tournament: Tournament,

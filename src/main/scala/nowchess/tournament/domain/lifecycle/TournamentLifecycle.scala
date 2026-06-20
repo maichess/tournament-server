@@ -58,12 +58,13 @@ object TournamentLifecycle:
       if idx < 0 then Left(DomainError.NotFound(s"round $roundNumber not found"))
       else Right(tournament.copy(rounds = tournament.rounds.updated(idx, updatedRound)))
 
-  def finish(tournament: Tournament, winner: BotRef): Either[DomainError, Tournament] =
+  def finish(tournament: Tournament, winner: BotRef, now: Instant): Either[DomainError, Tournament] =
     if tournament.status != TournamentStatus.Started then
       Left(DomainError.Conflict("tournament not started"))
     else
       Right(tournament.copy(
         status = TournamentStatus.Finished,
+        finishedAt = Some(now),
         winner = Some(winner),
       ))
 

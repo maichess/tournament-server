@@ -23,9 +23,10 @@ object RouteTestHelpers:
           case _ => ZIO.fail(new Exception("invalid token"))
 
       override def register(name: String, isBot: Boolean): Task[RegisterResult] =
-        ZIO.succeed(RegisterResult(if isBot then "bot_test" else "usr_test", "test-jwt-token"))
+        val id = if isBot then "bot_" + name.trim.toLowerCase.replaceAll("[^a-z0-9]+", "_") else "usr_test"
+        ZIO.succeed(RegisterResult(id, "test-jwt-token"))
 
-  val allLayers: ZLayer[Any, Nothing, TournamentService & GameService & StreamService & AuthService & GameRepository & Scope] =
+  val allLayers: ZLayer[Any, Nothing, TournamentService & GameService & StreamService & AuthService & GameRepository & BotRegistryService & Scope] =
     InMemoryTournamentRepository.layer ++
     InMemoryGameRepository.layer ++
     StreamServiceLive.layer ++

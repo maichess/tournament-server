@@ -11,6 +11,7 @@ import nowchess.tournament.domain.lifecycle.TournamentLifecycle
 import nowchess.tournament.domain.standing.ScoringRules
 import nowchess.tournament.domain.pairing.*
 import nowchess.tournament.persistence.{TournamentRepository, GameRepository}
+import java.time.Instant
 
 trait GameService:
   def getGame(gameId: GameId): Task[Game]
@@ -44,12 +45,14 @@ final class GameServiceLive(
       newBoard <- ZIO.fromEither(ChessRules.applyMove(board, move)).mapError(e => DomainError.BadRequest(e))
       newFen = ChessRules.boardToFen(newBoard)
       (newStatus, winner) = determineStatus(newBoard)
+      now = Instant.now()
       updatedGame = game.copy(
         moves = game.moves :+ uci,
         fen = newFen,
         turn = game.turn.opposite,
         status = newStatus,
         winner = winner,
+        endedAt = if newStatus.isTerminal then Some(now) else None,
       )
       _ <- gameRepo.save(updatedGame)
       _ <- publishMoveEvent(gameId, uci, newFen, updatedGame)
@@ -85,15 +88,20 @@ final class GameServiceLive(
         tournament.rounds.find(_.number == tournament.currentRound) match
           case None => ZIO.fail(DomainError.NotFound("current round not found"))
           case Some(currentRound) =>
-            val updatedPairings = currentRound.pairings.map: p =>
-              if p.matches.exists(_.gameId == gameId) then
-                p.recordResult(gameId, outcome, moves, tournament.config.matchesPerPairing)
-              else p
-            val updatedRound = currentRound.copy(pairings = updatedPairings)
-            ZIO.fromEither(TournamentLifecycle.updateRound(tournament, tournament.currentRound, updatedRound)).flatMap: updated =>
-              tournamentRepo.save(updated) *>
-                (if updatedRound.isComplete(tournament.config.matchesPerPairing) then handleRoundComplete(updated)
-                 else GameActivation.activate(updated, updatedRound, gameRepo, streamService))
+            val alreadyComplete = currentRound.pairings
+              .find(_.matches.exists(_.gameId == gameId))
+              .exists(_.aggregateOutcome.isDefined)
+            if alreadyComplete then ZIO.unit
+            else
+              val updatedPairings = currentRound.pairings.map: p =>
+                if p.matches.exists(_.gameId == gameId) then
+                  p.recordResult(gameId, outcome, moves, tournament.config.matchesPerPairing)
+                else p
+              val updatedRound = currentRound.copy(pairings = updatedPairings)
+              ZIO.fromEither(TournamentLifecycle.updateRound(tournament, tournament.currentRound, updatedRound)).flatMap: updated =>
+                tournamentRepo.save(updated) *>
+                  (if updatedRound.isComplete(tournament.config.matchesPerPairing) then handleRoundComplete(updated)
+                   else GameActivation.activate(updated, updatedRound, gameRepo, streamService))
 
   private def handleRoundComplete(tournament: Tournament): Task[Unit] =
     streamService.publishTournament(tournament.id, TournamentEvent.RoundFinished(tournament.currentRound)) *>
@@ -102,18 +110,23 @@ final class GameServiceLive(
 
   private def finishTournament(tournament: Tournament): Task[Unit] =
     val standings = ScoringRules.computeStandings(tournament)
-    val winner = standings.head.bot
-    ZIO.fromEither(TournamentLifecycle.finish(tournament, winner)).flatMap: finished =>
-      tournamentRepo.save(finished) *>
-        streamService.publishTournament(tournament.id, TournamentEvent.TournamentFinished(winner))
+    standings.headOption match
+      case None => ZIO.fail(DomainError.Conflict("no participants to determine winner"))
+      case Some(leader) =>
+        for
+          now     <- zio.Clock.instant
+          finished <- ZIO.fromEither(TournamentLifecycle.finish(tournament, leader.bot, now))
+          _       <- tournamentRepo.save(finished) *>
+                       streamService.publishTournament(tournament.id, TournamentEvent.TournamentFinished(leader.bot))
+        yield ()
 
   private def startNextRound(tournament: Tournament): Task[Unit] =
     ZIO.fromEither(TournamentLifecycle.advanceRound(tournament)).flatMap: advanced =>
       val standings = ScoringRules.computeStandings(advanced)
-      val algorithm = selectAlgorithm(advanced)
+      val algorithm = GameFactory.selectAlgorithm(advanced)
       val roundNum = advanced.currentRound
       val pairings = algorithm.pair(advanced.participants, standings, advanced.rounds, roundNum)
-      ZIO.foreach(pairings)(createGamesForPairing(advanced, roundNum, _)).flatMap: games =>
+      ZIO.foreach(pairings)(GameFactory.createForPairing(advanced, roundNum, _, gameRepo)).flatMap: games =>
         val roundPairings = games.map((pair, matches) =>
           Pairing(pair._1, pair._2, matches, None))
         val round = Round(roundNum, roundPairings)
@@ -121,22 +134,6 @@ final class GameServiceLive(
           tournamentRepo.save(withRound) *>
             streamService.publishTournament(tournament.id, TournamentEvent.RoundStarted(roundNum)) *>
             GameActivation.activate(withRound, round, gameRepo, streamService)
-
-  private def selectAlgorithm(tournament: Tournament): PairingAlgorithm =
-    tournament.config.format match
-      case TournamentFormat.Swiss             => SwissPairing
-      case TournamentFormat.SingleElimination => EliminationBracket
-      case TournamentFormat.DoubleElimination => EliminationBracket
-      case TournamentFormat.GroupStage(_)     => GroupStagePairing
-      case TournamentFormat.League            => RoundRobinPairing
-      case TournamentFormat.RandomKnockout    => RandomKnockoutPairing(tournament.seed)
-
-  private def createGamesForPairing(
-    tournament: Tournament,
-    roundNum: Int,
-    pair: (BotRef, BotRef),
-  ): Task[((BotRef, BotRef), Vector[Match])] =
-    GameFactory.create(tournament, roundNum, pair, gameRepo).map(matches => (pair, matches))
 
 object GameServiceLive:
   val layer: URLayer[GameRepository & TournamentRepository & StreamService, GameService] =

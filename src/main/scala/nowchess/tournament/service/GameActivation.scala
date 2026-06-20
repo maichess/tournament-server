@@ -3,6 +3,7 @@ package nowchess.tournament.service
 import zio.*
 import nowchess.tournament.domain.model.{TournamentId, Color}
 import nowchess.tournament.domain.game.{Game, GameStatus, GameScheduler}
+import java.time.Instant
 import nowchess.tournament.domain.round.Round
 import nowchess.tournament.domain.tournament.Tournament
 import nowchess.tournament.domain.event.TournamentEvent
@@ -38,7 +39,7 @@ object GameActivation:
     gameRepo: GameRepository,
     stream: StreamService,
   ): Task[Unit] =
-    val activated = game.copy(status = GameStatus.Ongoing)
+    val activated = game.copy(status = GameStatus.Ongoing, startedAt = Some(Instant.now()))
     gameRepo.save(activated) *>
       stream.publishTournament(tournamentId, TournamentEvent.GameStart(round, game.id, Color.White)) *>
       stream.publishTournament(tournamentId, TournamentEvent.GameStart(round, game.id, Color.Black))

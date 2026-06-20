@@ -19,7 +19,8 @@ object Main extends ZIOAppDefault:
     StreamRoutes.routes ++
     GameRoutes.routes ++
     OpeningRoutes.routes ++
-    BotRegistryRoutes.routes
+    BotRegistryRoutes.routes ++
+    AnalyticsExportRoutes.routes
 
   override val run: ZIO[Any, Throwable, Nothing] =
     Server.serve(allRoutes).provide(

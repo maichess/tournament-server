@@ -11,6 +11,13 @@ Die API ist vollständig als OpenAPI 3.0.3 spezifiziert und im Repository hinter
 
 ---
 
+## 📊 Analytics Export
+
+Abgeschlossene Turniere können als strukturierter Export abgerufen werden – inklusive aller Games, Standings und Bot-Metadaten:
+👉 **[docs/analytics.md](./docs/analytics.md)**
+
+---
+
 ## 🏛️ Architektur (Ansatz 1)
 
 * **Zentraler Server:** Einheitliche Plattform, mit der sich alle Bots verbinden.

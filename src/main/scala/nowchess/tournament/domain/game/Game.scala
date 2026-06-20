@@ -1,6 +1,7 @@
 package nowchess.tournament.domain.game
 
 import nowchess.tournament.domain.model.*
+import java.time.Instant
 
 final case class Game(
   id: GameId,
@@ -15,6 +16,8 @@ final case class Game(
   clock: GameClock,
   startPosition: StartPosition,
   fen: String,
+  startedAt: Option[Instant] = None,
+  endedAt: Option[Instant] = None,
 ):
   def movesUci: String = moves.mkString(" ")
 
@@ -27,6 +30,12 @@ final case class Game(
     case Some(Color.Black) => Some(GameOutcome.Black)
     case None if status.isTerminal => Some(GameOutcome.Draw)
     case None => None
+
+  def durationMillis: Option[Long] =
+    for
+      s <- startedAt
+      e <- endedAt
+    yield e.toEpochMilli - s.toEpochMilli
 
 final case class GameClock(
   whiteTime: Double,
