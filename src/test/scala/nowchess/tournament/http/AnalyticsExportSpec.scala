@@ -10,7 +10,8 @@ import nowchess.tournament.http.routes.{TournamentRoutes, ParticipationRoutes, R
 import nowchess.tournament.http.codec.JsonCodecs.given
 import nowchess.tournament.http.RouteTestHelpers.*
 import nowchess.tournament.domain.model.*
-import nowchess.tournament.service.{TournamentService, GameService, BotRegistryService}
+import nowchess.tournament.domain.tournament.TournamentFormat
+import nowchess.tournament.service.{TournamentService, GameService, BotRegistryService, CreateTournamentForm}
 import nowchess.tournament.persistence.GameRepository
 
 object AnalyticsExportSpec extends ZIOSpecDefault:
@@ -422,6 +423,96 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
         exportStandings.exists(s =>
           s.asObject.flatMap(_.get("engineType")).flatMap(_.asString).contains("heuristic")
         ),
+      )
+    },
+
+    test("export records a black winner and the winning bot id") {
+      for
+        createRes <- allRoutes.runZIO(
+          Request.post(URL(Path.root / "api" / "tournament"), Body.fromString(createTournamentBody(nbRounds = 1)))
+            .addHeaders(authHeader("director-token"))
+        )
+        body0 <- createRes.body.asString
+        id     = extractId(body0)
+        _ <- TournamentService.join(TournamentId(id), testBot1)
+        _ <- TournamentService.join(TournamentId(id), testBot2)
+        _ <- allRoutes.runZIO(
+          Request.post(URL(Path.root / "api" / "tournament" / id / "start"), Body.empty)
+            .addHeaders(authHeader("director-token"))
+        )
+        games <- GameRepository.findByTournament(TournamentId(id))
+        game   = games.head
+        gsvc  <- ZIO.service[GameService]
+        // Fool's mate — black checkmates white
+        _ <- gsvc.makeMove(game.id, "f2f3", game.white.id)
+        _ <- gsvc.makeMove(game.id, "e7e5", game.black.id)
+        _ <- gsvc.makeMove(game.id, "g2g4", game.white.id)
+        _ <- gsvc.makeMove(game.id, "d8h4", game.black.id)
+        response <- allRoutes.runZIO(
+          Request.get(URL(Path.root / "api" / "tournament" / id / "analytics-export"))
+        )
+        body <- response.body.asString
+      yield assertTrue(
+        body.contains("\"winner\":\"black\""),
+        body.contains(s"\"winnerBotId\":\"${game.black.id.value}\""),
+      )
+    },
+
+    test("export records a draw for a stalemate game") {
+      for
+        tsvc <- ZIO.service[TournamentService]
+        form  = CreateTournamentForm(
+          name = "Drawn", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
+          rated = true, format = TournamentFormat.Swiss,
+          startPosition = StartPosition.FromFen("k7/2K5/8/1Q6/8/8/8/8 w - - 0 1"),
+          matchesPerPairing = 1, groupSize = None,
+        )
+        t       <- tsvc.create(form, UserId("director1"))
+        _       <- tsvc.join(t.id, testBot1)
+        _       <- tsvc.join(t.id, testBot2)
+        started <- tsvc.start(t.id, UserId("director1"))
+        gameId   = started.rounds.head.pairings.head.matches.head.gameId
+        g       <- GameRepository.get(gameId).map(_.get)
+        gsvc    <- ZIO.service[GameService]
+        _       <- gsvc.makeMove(gameId, "b5b6", g.white.id) // stalemate → draw
+        response <- allRoutes.runZIO(
+          Request.get(URL(Path.root / "api" / "tournament" / t.id.value / "analytics-export"))
+        )
+        body <- response.body.asString
+      yield assertTrue(body.contains("\"winner\":\"draw\""))
+    },
+
+    test("export reports a still-ongoing game with a null winner") {
+      // best-of-2: a single win decides the pairing, finishing the 1-round
+      // tournament while the pairing's second game is still ongoing. That game
+      // appears in the export as terminationReason "ongoing" with winner null.
+      for
+        tsvc <- ZIO.service[TournamentService]
+        form  = CreateTournamentForm(
+          name = "BestOf2Export", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
+          rated = true, format = TournamentFormat.Swiss,
+          startPosition = StartPosition.Standard, matchesPerPairing = 2, groupSize = None,
+        )
+        t       <- tsvc.create(form, UserId("director1"))
+        _       <- tsvc.join(t.id, testBot1)
+        _       <- tsvc.join(t.id, testBot2)
+        started <- tsvc.start(t.id, UserId("director1"))
+        pairing  = started.rounds.head.pairings.head
+        g1       = pairing.matches(0).gameId
+        g1state <- GameRepository.get(g1).map(_.get)
+        gsvc    <- ZIO.service[GameService]
+        // Fool's mate on g1 alone decides the best-of-2 and finishes the tournament.
+        _ <- gsvc.makeMove(g1, "f2f3", g1state.white.id)
+        _ <- gsvc.makeMove(g1, "e7e5", g1state.black.id)
+        _ <- gsvc.makeMove(g1, "g2g4", g1state.white.id)
+        _ <- gsvc.makeMove(g1, "d8h4", g1state.black.id)
+        response <- allRoutes.runZIO(
+          Request.get(URL(Path.root / "api" / "tournament" / t.id.value / "analytics-export"))
+        )
+        body <- response.body.asString
+      yield assertTrue(
+        response.status == Status.Ok,
+        body.contains("\"terminationReason\":\"ongoing\""),
       )
     },
 

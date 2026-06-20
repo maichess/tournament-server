@@ -47,3 +47,7 @@ final case class GameClock(
     case Color.White => whiteTime
     case Color.Black => blackTime
 
+  def withTimeForTurn(turn: Color, time: Double): GameClock = turn match
+    case Color.White => copy(whiteTime = time)
+    case Color.Black => copy(blackTime = time)
+

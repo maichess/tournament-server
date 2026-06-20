@@ -155,7 +155,7 @@ object JsonCodecs:
       "status" -> Str(encodeAsString(g.status)),
       "turn" -> Str(if g.turn == Color.White then "white" else "black"),
       "winner" -> g.winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
-      "clock" -> Obj("whiteTime" -> Num(g.clock.whiteTime), "blackTime" -> Num(g.clock.blackTime)),
+      "clock" -> Obj("whiteTime" -> Num(g.clock.whiteTime), "blackTime" -> Num(g.clock.blackTime), "increment" -> Num(g.clock.increment)),
       "startPosition" -> Str(g.startPosition match { case StartPosition.Standard => "standard"; case StartPosition.FromFen(f) => f }),
       "startedAt" -> g.startedAt.map(i => Str(i.toString)).getOrElse(Null),
       "endedAt" -> g.endedAt.map(i => Str(i.toString)).getOrElse(Null),
@@ -185,7 +185,7 @@ object JsonCodecs:
       Obj(
         "type" -> Str("gameState"), "fen" -> Str(fen), "moves" -> Str(moves),
         "turn" -> Str(if turn == Color.White then "white" else "black"),
-        "clock" -> Obj("whiteTime" -> Num(clock.whiteTime), "blackTime" -> Num(clock.blackTime)),
+        "clock" -> Obj("whiteTime" -> Num(clock.whiteTime), "blackTime" -> Num(clock.blackTime), "increment" -> Num(clock.increment)),
         "status" -> Str(encodeAsString(status)),
         "winner" -> winner.map(c => Str(if c == Color.White then "white" else "black")).getOrElse(Null),
       )
@@ -194,7 +194,7 @@ object JsonCodecs:
       Obj(
         "type" -> Str("move"), "uci" -> Str(uci), "fen" -> Str(fen),
         "turn" -> Str(if turn == Color.White then "white" else "black"),
-        "clock" -> Obj("whiteTime" -> Num(clock.whiteTime), "blackTime" -> Num(clock.blackTime)),
+        "clock" -> Obj("whiteTime" -> Num(clock.whiteTime), "blackTime" -> Num(clock.blackTime), "increment" -> Num(clock.increment)),
       )
     case GameEvent.GameEnd(winner, status) =>
       import zio.json.ast.Json.*

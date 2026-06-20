@@ -27,26 +27,22 @@ object GameRoutes:
       Response.json(g.toJson)
     .catchAll(e => ZIO.succeed(TournamentRoutes.errorToResponse(e)))
 
+  private def isGameEnd(e: GameEvent): Boolean = e match
+    case _: GameEvent.GameEnd => true
+    case _                    => false
+
   private def streamGame(gameId: String, req: Request): ZIO[GameService & StreamService & AuthService, Nothing, Response] =
     (for
       _ <- AuthMiddleware.extractAuth(req)
       stream <- StreamService.subscribeGame(GameId(gameId))
       game <- GameService.getGame(GameId(gameId))
-      initialEvent = GameEvent.GameState(game.fen, game.movesUci, game.turn, game.clock, game.status, game.winner)
-      fullStream = ZStream.succeed(initialEvent) ++ stream
-      stringStream = fullStream.map(e => e.toJson + "\n")
-      heartbeatStream = ZStream.tick(10.seconds).map(_ => "\n")
-      combinedStream = stringStream.merge(heartbeatStream)
-      body = Body.fromStreamChunked(combinedStream.mapConcatChunk(s => zio.Chunk.fromArray(s.getBytes)))
-    yield Response(
-      status = Status.Ok,
-      headers = Headers(
-        Header.ContentType(MediaType("application", "x-ndjson")),
-        Header.Custom("Cache-Control", "no-cache"),
-        Header.Custom("Connection", "keep-alive")
-      ),
-      body = body,
-    )).catchAll(e => ZIO.succeed(TournamentRoutes.errorToResponse(e)))
+      snapshot = GameEvent.GameState(game.fen, game.movesUci, game.turn, game.clock, game.status, game.winner)
+      // The contract says the game stream closes when the game ends. An already
+      // finished game emits only its snapshot; an ongoing one runs until GameEnd.
+      events = if game.status.isTerminal then ZStream.succeed(snapshot)
+               else ZStream.succeed(snapshot) ++ stream
+    yield NdjsonStream.response(events, closeWhen = Some(isGameEnd))
+    ).catchAll(e => ZIO.succeed(TournamentRoutes.errorToResponse(e)))
 
   private def makeMove(gameId: String, uci: String, req: Request): ZIO[GameService & AuthService, Nothing, Response] =
     (for

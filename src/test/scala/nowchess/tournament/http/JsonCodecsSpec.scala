@@ -247,6 +247,33 @@ object JsonCodecsSpec extends ZIOSpecDefault:
       val json = gc.toJson
       assertTrue(json.fromJson[GameClock] == Right(gc))
     ,
+    test("Instant encodes as an ISO-8601 string"):
+      assertTrue(java.time.Instant.EPOCH.toJson == "\"1970-01-01T00:00:00Z\"")
+    ,
+    test("Game encodes startedAt, endedAt and the clock increment"):
+      val g = Game(
+        id = GameId("g3"),
+        tournamentId = TournamentId("t1"),
+        round = 1,
+        white = BotRef(BotId("w"), "White"),
+        black = BotRef(BotId("b"), "Black"),
+        moves = Vector.empty,
+        status = GameStatus.Timeout,
+        clock = GameClock(300, 300, 5),
+        startPosition = StartPosition.Standard,
+        winner = Some(Color.White),
+        turn = Color.Black,
+        fen = "some fen",
+        startedAt = Some(java.time.Instant.EPOCH),
+        endedAt = Some(java.time.Instant.EPOCH),
+      )
+      val json = g.toJson
+      assertTrue(
+        json.contains("\"increment\":5"),
+        json.contains("\"startedAt\":\"1970-01-01T00:00:00Z\""),
+        json.contains("\"endedAt\":\"1970-01-01T00:00:00Z\""),
+      )
+    ,
     test("TournamentFinished with winner"):
       val e = TournamentEvent.TournamentFinished(BotRef(BotId("w1"), "Winner"))
       assertTrue(e.toJson.contains("Winner"))

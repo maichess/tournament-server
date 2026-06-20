@@ -228,6 +228,31 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
       yield assertTrue(result.isFailure)
       ).provide(testLayer)
     },
+    test("finishing the second game of an already-decided pairing is a no-op") {
+      val form = CreateTournamentForm(
+        name = "BestOf2", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
+        rated = true, format = TournamentFormat.Swiss,
+        startPosition = StartPosition.Standard, matchesPerPairing = 2, groupSize = None,
+      )
+      (for
+        tsvc <- ZIO.service[TournamentService]
+        gsvc <- ZIO.service[GameService]
+        gameRepo <- ZIO.service[GameRepository]
+        t <- tsvc.create(form, director)
+        _ <- tsvc.join(t.id, bot1)
+        _ <- tsvc.join(t.id, bot2)
+        started <- tsvc.start(t.id, director)
+        pairing = started.rounds.head.pairings.head
+        g1 = pairing.matches(0).gameId
+        g2 = pairing.matches(1).gameId
+        // g1 alone decides the best-of-2 (one win is a majority), completing the pairing
+        _ <- foolsMate(gsvc, gameRepo, g1)
+        // g2 is still ongoing; finishing it now hits the alreadyComplete short-circuit
+        _ <- foolsMate(gsvc, gameRepo, g2)
+        g2state <- gameRepo.get(g2).map(_.get)
+      yield assertTrue(g2state.status == GameStatus.Checkmate)
+      ).provide(testLayer)
+    },
     test("makeMove on finished game fails") {
       val form = CreateTournamentForm(
         name = "Fin", nbRounds = 1, clockLimit = 300, clockIncrement = 3,

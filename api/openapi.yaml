@@ -1073,25 +1073,31 @@ components:
             blackTime:
               type: number
               description: Remaining time for black in seconds
+            increment:
+              type: integer
+              description: Fischer increment added after each move, in seconds
         startPosition:
           type: string
           description: Starting FEN (standard or custom)
 
     GameEvent:
       description: |
-        One JSON object per NDJSON line. Discriminate on `type`.
+        One JSON object per NDJSON line. Discriminate on `type`. A `heartbeat`
+        line (`{"type":"heartbeat"}`) is sent periodically to keep the
+        connection alive; clients should ignore it.
 
         | type | extra fields |
         |------|-------------|
         | `gameState` | full `GameState` snapshot |
         | `move` | `uci`, `fen`, `turn`, `clock` |
         | `gameEnd` | `winner`, `status` |
+        | `heartbeat` | — |
       type: object
       required: [type]
       properties:
         type:
           type: string
-          enum: [gameState, move, gameEnd]
+          enum: [gameState, move, gameEnd, heartbeat]
         uci:
           type: string
           example: e2e4
@@ -1107,6 +1113,9 @@ components:
               type: number
             blackTime:
               type: number
+            increment:
+              type: integer
+              description: Fischer increment added after each move, in seconds
         winner:
           type: string
           enum: [white, black]
@@ -1140,7 +1149,9 @@ components:
 
     TournamentEvent:
       description: |
-        One JSON object per NDJSON line. Discriminate on `type`.
+        One JSON object per NDJSON line. Discriminate on `type`. A `heartbeat`
+        line (`{"type":"heartbeat"}`) is sent periodically to keep the
+        connection alive; clients should ignore it.
 
         | type | extra fields |
         |------|-------------|
@@ -1149,6 +1160,7 @@ components:
         | `gameStart` | `round`, `gameId`, `color` |
         | `roundFinished` | `round` |
         | `tournamentFinished` | `winner` |
+        | `heartbeat` | — |
       type: object
       required: [type]
       properties:
@@ -1160,6 +1172,7 @@ components:
             - gameStart
             - roundFinished
             - tournamentFinished
+            - heartbeat
         round:
           type: integer
           example: 2
