@@ -88,6 +88,16 @@ object PairingSpec extends ZIOSpecDefault:
         val p = Pairing(bot1, bot2, matches, None)
         assertTrue(p.earlyWinner(2).contains(GameOutcome.White))
       },
+      test("earlyWinner normalises a reversed-colour white win to the nominal black") {
+        // g1: colours reversed (bot2 plays white) and white wins, i.e. bot2 won
+        // — credited to the pairing's nominal black. So black takes the pairing.
+        val matches = Vector(
+          Match(GameId("g1"), bot2.id, Some(GameOutcome.White), None),
+          Match(GameId("g2"), bot2.id, Some(GameOutcome.White), None),
+        )
+        val p = Pairing(bot1, bot2, matches, None)
+        assertTrue(p.earlyWinner(2).contains(GameOutcome.Black))
+      },
       test("earlyWinner keeps a reversed draw as a draw") {
         val matches = Vector(
           Match(GameId("g1"), bot1.id, Some(GameOutcome.Draw), None),

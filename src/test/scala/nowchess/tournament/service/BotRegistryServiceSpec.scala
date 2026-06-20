@@ -74,6 +74,35 @@ object BotRegistryServiceSpec extends ZIOSpecDefault:
         found <- svc.get(bot.id)
       yield assertTrue(found.isEmpty)
     },
+    test("register stores and trims all engine metadata when provided") {
+      for
+        svc <- ZIO.service[BotRegistryService]
+        bot <- svc.register(
+          "FullMeta", Some("http://x"),
+          family = Some(" fam "), strategyType = Some(" strat "),
+          engineType = Some(" eng "), modelVersion = Some(" v1 "),
+        )
+      yield assertTrue(
+        bot.family.contains("fam"),
+        bot.strategyType.contains("strat"),
+        bot.engineType.contains("eng"),
+        bot.modelVersion.contains("v1"),
+      )
+    },
+    test("register and get are reachable through the service accessors") {
+      for
+        bot     <- BotRegistryService.register("ViaCompanion", None)
+        fetched <- BotRegistryService.get(bot.id)
+      yield assertTrue(fetched.contains(bot))
+    },
+    test("list and delete are reachable through the service accessors") {
+      for
+        bot  <- BotRegistryService.register("CompanionLifecycle", None)
+        all  <- BotRegistryService.list
+        _    <- BotRegistryService.delete(bot.id)
+        gone <- BotRegistryService.get(bot.id)
+      yield assertTrue(all.exists(_.id == bot.id), gone.isEmpty)
+    },
     test("re-registering the same name preserves existing metadata") {
       for
         svc  <- ZIO.service[BotRegistryService]

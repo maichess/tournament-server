@@ -16,6 +16,7 @@ final case class Game(
   clock: GameClock,
   startPosition: StartPosition,
   fen: String,
+  lastMoveAt: Instant = Instant.EPOCH,
   startedAt: Option[Instant] = None,
   endedAt: Option[Instant] = None,
 ):
@@ -40,4 +41,13 @@ final case class Game(
 final case class GameClock(
   whiteTime: Double,
   blackTime: Double,
-)
+  increment: Int = 0,
+):
+  def timeForTurn(turn: Color): Double = turn match
+    case Color.White => whiteTime
+    case Color.Black => blackTime
+
+  def withTimeForTurn(turn: Color, time: Double): GameClock = turn match
+    case Color.White => copy(whiteTime = time)
+    case Color.Black => copy(blackTime = time)
+

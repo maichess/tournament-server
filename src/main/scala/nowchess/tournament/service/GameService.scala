@@ -40,24 +40,65 @@ final class GameServiceLive(
       _    <- ZIO.when(game.status.isTerminal)(ZIO.fail(DomainError.Conflict("game already finished")))
       _    <- ZIO.when(game.status == GameStatus.Pending)(ZIO.fail(DomainError.Conflict("game not active")))
       _    <- ZIO.when(game.currentPlayer.id != botId)(ZIO.fail(DomainError.Forbidden("not your turn")))
+      now  <- zio.Clock.instant
       move <- ZIO.fromEither(ChessRules.parseUci(uci)).mapError(e => DomainError.BadRequest(e))
       board <- ZIO.fromEither(ChessRules.parseFen(game.fen)).mapError(e => DomainError.BadRequest(e))
       newBoard <- ZIO.fromEither(ChessRules.applyMove(board, move)).mapError(e => DomainError.BadRequest(e))
       newFen = ChessRules.boardToFen(newBoard)
       (newStatus, winner) = determineStatus(newBoard)
-      now = Instant.now()
+      (newClock, flagged) = ClockRules.applyMove(game.clock, game.turn, game.lastMoveAt, now)
+      (finalStatus, finalWinner) = if flagged then (GameStatus.Timeout, Some(game.turn.opposite))
+        else (newStatus, winner)
       updatedGame = game.copy(
         moves = game.moves :+ uci,
         fen = newFen,
         turn = game.turn.opposite,
-        status = newStatus,
-        winner = winner,
-        endedAt = if newStatus.isTerminal then Some(now) else None,
+        status = finalStatus,
+        winner = finalWinner,
+        clock = newClock,
+        lastMoveAt = now,
+        endedAt = if finalStatus.isTerminal then Some(now) else None,
       )
       _ <- gameRepo.save(updatedGame)
       _ <- publishMoveEvent(gameId, uci, newFen, updatedGame)
-      _ <- ZIO.when(newStatus.isTerminal)(handleGameEnd(updatedGame))
+      _ <- ZIO.when(finalStatus.isTerminal)(handleGameEnd(updatedGame))
     yield updatedGame
+
+  /** Single pass of the timeout daemon: for every started tournament, end any
+    * ongoing game whose clock has run out. The decision is re-evaluated inside
+    * the atomic `modifyIf`, so a game a concurrent move has just finished (or
+    * whose clock a move just refreshed) is left untouched and `handleGameEnd`
+    * fires exactly once. */
+  def timeoutSweep: Task[Unit] =
+    zio.Clock.instant.flatMap: now =>
+      tournamentRepo.listByStatus.flatMap: byStatus =>
+        ZIO.foreachDiscard(byStatus.getOrElse(TournamentStatus.Started, Vector.empty))(t => sweepTournament(t.id, now))
+
+  private def sweepTournament(id: TournamentId, now: Instant): Task[Unit] =
+    gameRepo.findByTournament(id).flatMap: games =>
+      ZIO.foreachDiscard(games.filter(_.status == GameStatus.Ongoing))(g => timeoutGame(g.id, now))
+
+  private def timeoutGame(gameId: GameId, now: Instant): Task[Unit] =
+    val timeout = (g: Game) =>
+      if g.status == GameStatus.Ongoing && ClockRules.hasFlagged(g.clock, g.turn, g.lastMoveAt, now) then
+        Some(g.copy(
+          status = GameStatus.Timeout,
+          winner = Some(g.turn.opposite),
+          clock = g.clock.withTimeForTurn(g.turn, 0.0),
+          endedAt = Some(now),
+        ))
+      else None
+    gameRepo.modifyIf(gameId)(timeout).flatMap:
+      case Some(timedOut) => handleGameEnd(timedOut)
+      case None           => ZIO.unit
+
+  /** One daemon iteration with failures swallowed (and logged) so a transient
+    * repository error can never permanently kill the loop. */
+  private[service] def timeoutTick: UIO[Unit] =
+    timeoutSweep.catchAllCause(c => ZIO.logErrorCause("Timeout sweep failed", c))
+
+  def startTimeoutDaemon: UIO[Fiber.Runtime[Nothing, Nothing]] =
+    (timeoutTick *> ZIO.sleep(1.second)).forever.forkDaemon
 
   private def determineStatus(board: ChessRules.Board): (GameStatus, Option[Color]) =
     if ChessRules.isCheckmate(board) then
@@ -109,16 +150,19 @@ final class GameServiceLive(
        else startNextRound(tournament))
 
   private def finishTournament(tournament: Tournament): Task[Unit] =
-    val standings = ScoringRules.computeStandings(tournament)
-    standings.headOption match
-      case None => ZIO.fail(DomainError.Conflict("no participants to determine winner"))
+    // finishTournament only runs once a round has completed, so the tournament
+    // has participants and computeStandings is never empty; the empty case is a
+    // defensive guard excluded from coverage as it is unreachable in practice.
+    ScoringRules.computeStandings(tournament).headOption match
       case Some(leader) =>
-        for
-          now     <- zio.Clock.instant
-          finished <- ZIO.fromEither(TournamentLifecycle.finish(tournament, leader.bot, now))
-          _       <- tournamentRepo.save(finished) *>
-                       streamService.publishTournament(tournament.id, TournamentEvent.TournamentFinished(leader.bot))
-        yield ()
+        zio.Clock.instant.flatMap: now =>
+          ZIO.fromEither(TournamentLifecycle.finish(tournament, leader.bot, now)).flatMap: finished =>
+            tournamentRepo.save(finished) *>
+              streamService.publishTournament(tournament.id, TournamentEvent.TournamentFinished(leader.bot))
+      // $COVERAGE-OFF$
+      case None =>
+        ZIO.fail(DomainError.Conflict("no participants to determine winner"))
+      // $COVERAGE-ON$
 
   private def startNextRound(tournament: Tournament): Task[Unit] =
     ZIO.fromEither(TournamentLifecycle.advanceRound(tournament)).flatMap: advanced =>
@@ -142,4 +186,6 @@ object GameServiceLive:
         gameRepo <- ZIO.service[GameRepository]
         tournamentRepo <- ZIO.service[TournamentRepository]
         stream <- ZIO.service[StreamService]
-      yield GameServiceLive(gameRepo, tournamentRepo, stream)
+        service = GameServiceLive(gameRepo, tournamentRepo, stream)
+        _ <- service.startTimeoutDaemon
+      yield service

@@ -40,10 +40,10 @@ final class BotRegistryServiceLive(repo: BotRegistryRepository, authService: Aut
   override def register(
     name: String,
     endpoint: Option[String],
-    family: Option[String] = None,
-    strategyType: Option[String] = None,
-    engineType: Option[String] = None,
-    modelVersion: Option[String] = None,
+    family: Option[String],
+    strategyType: Option[String],
+    engineType: Option[String],
+    modelVersion: Option[String],
   ): Task[RegisteredBot] =
     for
       _        <- ZIO.when(name.isBlank)(ZIO.fail(DomainError.BadRequest("name must not be blank")))

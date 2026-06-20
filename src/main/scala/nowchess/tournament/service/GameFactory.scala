@@ -52,7 +52,11 @@ object GameFactory:
         status = GameStatus.Pending,
         turn = Color.White,
         winner = None,
-        clock = GameClock(tournament.config.clock.limit.toDouble, tournament.config.clock.limit.toDouble),
+        clock = GameClock(
+          tournament.config.clock.limit.toDouble,
+          tournament.config.clock.limit.toDouble,
+          tournament.config.clock.increment,
+        ),
         startPosition = startPos,
         fen = startPos.toFen,
       )

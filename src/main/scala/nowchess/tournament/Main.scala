@@ -3,6 +3,7 @@ package nowchess.tournament
 import zio.*
 import zio.http.*
 import nowchess.tournament.config.AppConfig
+import nowchess.tournament.http.Cors
 import nowchess.tournament.http.routes.*
 import nowchess.tournament.persistence.{InMemoryTournamentRepository, InMemoryGameRepository, InMemoryIdentityRepository, InMemoryOpeningRepository, InMemoryBotRegistryRepository}
 import nowchess.tournament.service.*
@@ -11,8 +12,10 @@ object Main extends ZIOAppDefault:
 
   private val config = AppConfig.fromEnv(sys.env)
 
+  private val corsConfig = Cors.config(config.allowedOrigins)
+
   private val allRoutes =
-    AuthRoutes.routes ++
+    (AuthRoutes.routes ++
     TournamentRoutes.routes ++
     ParticipationRoutes.routes ++
     ResultRoutes.routes ++
@@ -20,7 +23,7 @@ object Main extends ZIOAppDefault:
     GameRoutes.routes ++
     OpeningRoutes.routes ++
     BotRegistryRoutes.routes ++
-    AnalyticsExportRoutes.routes
+    AnalyticsExportRoutes.routes) @@ Middleware.cors(corsConfig)
 
   override val run: ZIO[Any, Throwable, Nothing] =
     Server.serve(allRoutes).provide(
