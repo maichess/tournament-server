@@ -12,7 +12,14 @@ import nowchess.tournament.http.middleware.AuthMiddleware
 
 object BotRegistryRoutes:
 
-  final case class RegisterBotRequest(name: String, endpoint: Option[String])
+  final case class RegisterBotRequest(
+    name: String,
+    endpoint: Option[String],
+    family: Option[String] = None,
+    strategyType: Option[String] = None,
+    engineType: Option[String] = None,
+    modelVersion: Option[String] = None,
+  )
   object RegisterBotRequest:
     given JsonDecoder[RegisterBotRequest] = DeriveJsonDecoder.gen[RegisterBotRequest]
 
@@ -39,7 +46,14 @@ object BotRegistryRoutes:
       body <- req.body.asString.mapError(e => DomainError.BadRequest(e.getMessage))
       parsed <- ZIO.fromEither(body.fromJson[RegisterBotRequest])
         .mapError(err => DomainError.BadRequest(s"invalid request body: $err"))
-      bot <- BotRegistryService.register(parsed.name, parsed.endpoint)
+      bot <- BotRegistryService.register(
+        parsed.name,
+        parsed.endpoint,
+        parsed.family,
+        parsed.strategyType,
+        parsed.engineType,
+        parsed.modelVersion,
+      )
     yield Response.json(bot.toJson).status(Status.Created)
     ).catchAll(e => ZIO.succeed(TournamentRoutes.errorToResponse(e)))
 

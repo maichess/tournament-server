@@ -25,7 +25,8 @@ object Main extends ZIOAppDefault:
     StreamRoutes.routes ++
     GameRoutes.routes ++
     OpeningRoutes.routes ++
-    BotRegistryRoutes.routes) @@ Middleware.cors(corsConfig)
+    BotRegistryRoutes.routes ++
+    AnalyticsExportRoutes.routes) @@ Middleware.cors(corsConfig)
 
   override val run: ZIO[Any, Throwable, Nothing] =
     Server.serve(allRoutes).provide(

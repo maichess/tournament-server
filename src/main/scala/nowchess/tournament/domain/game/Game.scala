@@ -17,6 +17,8 @@ final case class Game(
   startPosition: StartPosition,
   fen: String,
   lastMoveAt: Instant = Instant.EPOCH,
+  startedAt: Option[Instant] = None,
+  endedAt: Option[Instant] = None,
 ):
   def movesUci: String = moves.mkString(" ")
 
@@ -29,6 +31,12 @@ final case class Game(
     case Some(Color.Black) => Some(GameOutcome.Black)
     case None if status.isTerminal => Some(GameOutcome.Draw)
     case None => None
+
+  def durationMillis: Option[Long] =
+    for
+      s <- startedAt
+      e <- endedAt
+    yield e.toEpochMilli - s.toEpochMilli
 
 final case class GameClock(
   whiteTime: Double,

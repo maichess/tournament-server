@@ -51,6 +51,8 @@ tags:
     description: Join and withdraw
   - name: Results
     description: Standings, pairings, and game export
+  - name: Analytics
+    description: Stable analytics export for external pipelines
   - name: Stream
     description: NDJSON event streams
   - name: Game
@@ -486,6 +488,36 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/tournament/{id}/analytics-export:
+    parameters:
+      - $ref: "#/components/parameters/id"
+
+    get:
+      tags: [Analytics]
+      summary: Export all data needed for external analytics
+      description: |
+        Returns a single JSON document containing all game results and final
+        standings needed by external clients to run their own Spark or
+        batch analytics pipelines.
+
+        This endpoint does **not** compute analytics. It assembles raw data
+        from the tournament into one stable, versioned payload.
+
+        Available only when the tournament `status` is `finished`.
+        Returns **409** if the tournament is still running.
+      security: []
+      responses:
+        "200":
+          description: Full analytics export document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsExport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/tournament/{id}/stream:
     parameters:
       - $ref: "#/components/parameters/id"
@@ -688,6 +720,26 @@ components:
           nullable: true
           description: Optional external play URL for the bot
           example: https://bots.example.com/stockfish
+        family:
+          type: string
+          nullable: true
+          description: Bot family for analytics grouping (e.g. searchess-ai, stockfish, heuristic)
+          example: stockfish
+        strategyType:
+          type: string
+          nullable: true
+          description: Strategy type within the family (e.g. material-greedy, random, neural)
+          example: material-greedy
+        engineType:
+          type: string
+          nullable: true
+          description: Underlying engine type (e.g. uci, http, internal)
+          example: uci
+        modelVersion:
+          type: string
+          nullable: true
+          description: Model or engine version string
+          example: "16"
 
     RegisterBotRequest:
       type: object
@@ -700,6 +752,22 @@ components:
           type: string
           description: Optional external play URL for the bot
           example: https://bots.example.com/stockfish
+        family:
+          type: string
+          description: Bot family for analytics grouping
+          example: stockfish
+        strategyType:
+          type: string
+          description: Strategy type within the family
+          example: material-greedy
+        engineType:
+          type: string
+          description: Underlying engine type
+          example: uci
+        modelVersion:
+          type: string
+          description: Model or engine version string
+          example: "16"
 
     AddParticipantRequest:
       type: object
@@ -1103,6 +1171,225 @@ components:
           enum: [white, black]
         winner:
           $ref: "#/components/schemas/BotRef"
+
+    AnalyticsExportGame:
+      type: object
+      description: All fields needed to compute analytics for one game
+      required: [gameId, tournamentId, round, whiteBotId, whiteBotName, blackBotId, blackBotName, terminationReason, totalPly, moves]
+      properties:
+        gameId:
+          type: string
+          example: j0nPtcjl
+        tournamentId:
+          type: string
+          example: t7kXq2
+        round:
+          type: integer
+          example: 1
+        whiteBotId:
+          type: string
+          example: bot_abc
+        whiteBotName:
+          type: string
+          example: StockfishClone
+        whiteBotFamily:
+          type: string
+          nullable: true
+          example: stockfish
+        whiteStrategyType:
+          type: string
+          nullable: true
+          example: null
+        whiteEngineType:
+          type: string
+          nullable: true
+          description: Engine type of the white bot as registered (e.g. heuristic, searchess-ai, stockfish)
+          example: heuristic
+        whiteModelVersion:
+          type: string
+          nullable: true
+          description: Model version of the white bot as registered
+          example: v2.0
+        blackBotId:
+          type: string
+          example: bot_xyz
+        blackBotName:
+          type: string
+          example: RandomBot
+        blackBotFamily:
+          type: string
+          nullable: true
+          example: heuristic
+        blackStrategyType:
+          type: string
+          nullable: true
+          example: random
+        blackEngineType:
+          type: string
+          nullable: true
+          description: Engine type of the black bot as registered
+          example: null
+        blackModelVersion:
+          type: string
+          nullable: true
+          description: Model version of the black bot as registered
+          example: null
+        winner:
+          type: string
+          nullable: true
+          enum: [white, black, draw]
+          example: white
+        winnerBotId:
+          type: string
+          nullable: true
+          description: Bot id of the winner, null for draws
+          example: bot_abc
+        terminationReason:
+          type: string
+          enum: [checkmate, stalemate, draw, resigned, timeout, pending, ongoing]
+          example: checkmate
+        totalPly:
+          type: integer
+          description: Total half-moves played
+          example: 5
+        moves:
+          type: string
+          description: Space-separated UCI move sequence
+          example: e2e4 f7f6 d2d4 g7g5 d1h5
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-06-17T10:05:00Z"
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-06-17T10:05:03Z"
+        durationMillis:
+          type: integer
+          nullable: true
+          description: Game duration in milliseconds (null if timing not available)
+          example: 3124
+
+    AnalyticsExportStanding:
+      type: object
+      required: [tournamentId, botId, botName, rank, points, wins, draws, losses, nbGames, tieBreak]
+      properties:
+        tournamentId:
+          type: string
+          example: t7kXq2
+        botId:
+          type: string
+          example: bot_abc
+        botName:
+          type: string
+          example: StockfishClone
+        botFamily:
+          type: string
+          nullable: true
+          example: stockfish
+        strategyType:
+          type: string
+          nullable: true
+          example: null
+        engineType:
+          type: string
+          nullable: true
+          description: Engine type of the bot as registered
+          example: heuristic
+        modelVersion:
+          type: string
+          nullable: true
+          description: Model version of the bot as registered
+          example: v2.0
+        rank:
+          type: integer
+          example: 1
+        points:
+          type: number
+          example: 3.5
+        wins:
+          type: integer
+          example: 3
+        draws:
+          type: integer
+          example: 1
+        losses:
+          type: integer
+          example: 0
+        nbGames:
+          type: integer
+          description: >
+            Number of pairings (match-ups) completed by this bot. For
+            tournaments using a multi-position opening book each pairing
+            produces `matchesPerPairing` individual game records in the
+            `games` array, so `nbGames` counts opponents faced, not total
+            games played.
+          example: 4
+        tieBreak:
+          type: number
+          example: 9.0
+
+    AnalyticsExport:
+      type: object
+      description: |
+        Stable, versioned export contract for external analytics pipelines.
+        Contains all game results and final standings needed by any client
+        to compute leaderboards, ELO ratings, and statistics without
+        additional API calls.
+
+        This endpoint does **not** run analytics. It assembles raw tournament
+        data into a single document. Clients (e.g. the Searchess Spark pipeline)
+        import this payload and compute analytics independently.
+
+        `schemaVersion` is always `"1.0"`. Consumers should gate on this value
+        before deserializing to detect breaking changes in future versions.
+      required: [schemaVersion, tournamentId, format, clock, rated, nbRounds, exportedAt, standings, games]
+      properties:
+        schemaVersion:
+          type: string
+          description: Schema version of this export document. Currently always "1.0".
+          example: "1.0"
+        tournamentId:
+          type: string
+          example: t7kXq2
+        format:
+          type: string
+          enum: [swiss, singleElimination, doubleElimination, groupStage, league, randomKnockout]
+          example: swiss
+        clock:
+          $ref: "#/components/schemas/Clock"
+        rated:
+          type: boolean
+          example: true
+        nbRounds:
+          type: integer
+          description: Total number of rounds in the tournament
+          example: 5
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-06-17T10:00:00Z"
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-06-17T12:30:00Z"
+        exportedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when this document was generated
+          example: "2025-06-17T12:31:00Z"
+        standings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsExportStanding"
+        games:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsExportGame"
 
     Ok:
       type: object
