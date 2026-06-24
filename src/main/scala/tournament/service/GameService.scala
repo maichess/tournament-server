@@ -123,26 +123,29 @@ final class GameServiceLive(
     outcome: GameOutcome,
     moves: String,
   ): Task[Unit] =
-    tournamentRepo.get(tournamentId).flatMap:
-      case None => ZIO.fail(DomainError.NotFound("tournament not found"))
-      case Some(tournament) =>
-        tournament.rounds.find(_.number == tournament.currentRound) match
-          case None => ZIO.fail(DomainError.NotFound("current round not found"))
-          case Some(currentRound) =>
-            val alreadyComplete = currentRound.pairings
-              .find(_.matches.exists(_.gameId == gameId))
-              .exists(_.aggregateOutcome.isDefined)
-            if alreadyComplete then ZIO.unit
-            else
-              val updatedPairings = currentRound.pairings.map: p =>
-                if p.matches.exists(_.gameId == gameId) then
-                  p.recordResult(gameId, outcome, moves, tournament.config.matchesPerPairing)
-                else p
-              val updatedRound = currentRound.copy(pairings = updatedPairings)
-              ZIO.fromEither(TournamentLifecycle.updateRound(tournament, tournament.currentRound, updatedRound)).flatMap: updated =>
-                tournamentRepo.save(updated) *>
-                  (if updatedRound.isComplete(tournament.config.matchesPerPairing) then handleRoundComplete(updated)
-                   else GameActivation.activate(updated, updatedRound, gameRepo, streamService))
+    tournamentRepo.modifyIf(tournamentId): tournament =>
+      for
+        currentRound <- tournament.rounds.find(_.number == tournament.currentRound)
+        if !currentRound.pairings
+          .find(_.matches.exists(_.gameId == gameId))
+          .exists(_.aggregateOutcome.isDefined)
+        updatedPairings = currentRound.pairings.map: p =>
+          if p.matches.exists(_.gameId == gameId) then
+            p.recordResult(gameId, outcome, moves, tournament.config.matchesPerPairing)
+          else p
+        updatedRound = currentRound.copy(pairings = updatedPairings)
+        updated <- TournamentLifecycle.updateRound(tournament, tournament.currentRound, updatedRound).toOption
+      yield updated
+    .flatMap:
+      case None => ZIO.unit
+      case Some(updated) =>
+        updated.rounds.find(_.number == updated.currentRound) match
+          // $COVERAGE-OFF$
+          case None => ZIO.unit
+          // $COVERAGE-ON$
+          case Some(updatedRound) =>
+            if updatedRound.isComplete(updated.config.matchesPerPairing) then handleRoundComplete(updated)
+            else GameActivation.activate(updated, updatedRound, gameRepo, streamService)
 
   private def handleRoundComplete(tournament: Tournament): Task[Unit] =
     streamService.publishTournament(tournament.id, TournamentEvent.RoundFinished(tournament.currentRound)) *>

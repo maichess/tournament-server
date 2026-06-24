@@ -19,6 +19,12 @@ final class InMemoryTournamentRepository(ref: Ref[Map[TournamentId, Tournament]]
     ref.get.map: m =>
       m.values.toVector.groupBy(_.status).withDefaultValue(Vector.empty)
 
+  override def modifyIf(id: TournamentId)(f: Tournament => Option[Tournament]): Task[Option[Tournament]] =
+    ref.modify: m =>
+      m.get(id).flatMap(f) match
+        case Some(updated) => (Some(updated), m.updated(id, updated))
+        case None          => (None, m)
+
 object InMemoryTournamentRepository:
   val layer: ULayer[TournamentRepository] =
     ZLayer:

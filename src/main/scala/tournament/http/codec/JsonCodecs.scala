@@ -167,12 +167,13 @@ object JsonCodecs:
       zio.json.ast.Json.Obj("type" -> zio.json.ast.Json.Str("tournamentStarted"))
     case TournamentEvent.RoundStarted(r) =>
       zio.json.ast.Json.Obj("type" -> zio.json.ast.Json.Str("roundStarted"), "round" -> zio.json.ast.Json.Num(r))
-    case TournamentEvent.GameStart(r, gid, color) =>
+    case TournamentEvent.GameStart(r, gid, color, botId) =>
       zio.json.ast.Json.Obj(
         "type" -> zio.json.ast.Json.Str("gameStart"),
         "round" -> zio.json.ast.Json.Num(r),
         "gameId" -> zio.json.ast.Json.Str(gid.value),
         "color" -> zio.json.ast.Json.Str(if color == Color.White then "white" else "black"),
+        "botId" -> zio.json.ast.Json.Str(botId.value),
       )
     case TournamentEvent.RoundFinished(r) =>
       zio.json.ast.Json.Obj("type" -> zio.json.ast.Json.Str("roundFinished"), "round" -> zio.json.ast.Json.Num(r))

@@ -98,6 +98,7 @@ object TimeoutSpec extends ZIOSpecDefault:
         def save(t: Tournament)     = ZIO.unit
         def delete(id: TournamentId) = ZIO.unit
         def listByStatus            = ZIO.fail(new RuntimeException("boom"))
+        def modifyIf(id: TournamentId)(f: Tournament => Option[Tournament]) = ZIO.fail(new RuntimeException("boom"))
       (for
         gameRepo <- ZIO.service[GameRepository]
         stream   <- ZIO.service[StreamService]

@@ -107,7 +107,7 @@ object JsonCodecsSpec extends ZIOSpecDefault:
     test("TournamentEvent encodes all variants"):
       val started = TournamentEvent.TournamentStarted
       val roundStarted = TournamentEvent.RoundStarted(1)
-      val gameStart = TournamentEvent.GameStart(1, GameId("g1"), Color.White)
+      val gameStart = TournamentEvent.GameStart(1, GameId("g1"), Color.White, BotId("b1"))
       val roundFinished = TournamentEvent.RoundFinished(1)
       val finished = TournamentEvent.TournamentFinished(BotRef(BotId("b1"), "Winner"))
       assertTrue(

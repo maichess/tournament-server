@@ -1,7 +1,7 @@
 package tournament.service
 
 import zio.*
-import tournament.domain.model.{TournamentId, GameId, Color}
+import tournament.domain.model.{TournamentId, GameId, BotId, Color}
 import tournament.domain.game.{Game, GameStatus, GameScheduler}
 import java.time.Instant
 import tournament.domain.round.Round
@@ -43,14 +43,14 @@ object GameActivation:
   ): Task[Unit] =
     val activated = game.copy(status = GameStatus.Ongoing, startedAt = Some(now), lastMoveAt = now)
     gameRepo.save(activated) *>
-      ZIO.foreachDiscard(gameStartEvents(round, game.id))(stream.publishTournament(tournamentId, _))
+      ZIO.foreachDiscard(gameStartEvents(round, game.id, game.white.id, game.black.id))(stream.publishTournament(tournamentId, _))
 
   /** The `gameStart` announcements for one game — one per colour, so the bot of
     * either side learns its game has begun. */
-  def gameStartEvents(round: Int, gameId: GameId): Vector[TournamentEvent] =
+  def gameStartEvents(round: Int, gameId: GameId, whiteId: BotId, blackId: BotId): Vector[TournamentEvent] =
     Vector(
-      TournamentEvent.GameStart(round, gameId, Color.White),
-      TournamentEvent.GameStart(round, gameId, Color.Black),
+      TournamentEvent.GameStart(round, gameId, Color.White, whiteId),
+      TournamentEvent.GameStart(round, gameId, Color.Black, blackId),
     )
 
   /** Catch-up announcements for a subscriber that joins the tournament stream
@@ -61,9 +61,11 @@ object GameActivation:
     tournament.rounds.find(_.number == tournament.currentRound) match
       case None => Vector.empty
       case Some(round) =>
-        val ongoingIds = games.iterator.filter(_.status == GameStatus.Ongoing).map(_.id).toSet
+        val ongoingGames = games.iterator.filter(_.status == GameStatus.Ongoing).map(g => g.id -> g).toMap
         round.pairings.iterator
           .flatMap(_.matches.iterator.map(_.gameId))
-          .filter(ongoingIds.contains)
-          .flatMap(gid => gameStartEvents(tournament.currentRound, gid))
+          .filter(ongoingGames.contains)
+          .flatMap(gid =>
+            val g = ongoingGames(gid)
+            gameStartEvents(tournament.currentRound, gid, g.white.id, g.black.id))
           .toVector

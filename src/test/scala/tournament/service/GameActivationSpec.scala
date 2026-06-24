@@ -35,9 +35,9 @@ object GameActivationSpec extends ZIOSpecDefault:
 
   def spec = suite("GameActivation")(
     test("gameStartEvents announces white then black for one game"):
-      assertTrue(GameActivation.gameStartEvents(3, GameId("gx")) == Vector(
-        TournamentEvent.GameStart(3, GameId("gx"), Color.White),
-        TournamentEvent.GameStart(3, GameId("gx"), Color.Black),
+      assertTrue(GameActivation.gameStartEvents(3, GameId("gx"), BotId("b1"), BotId("b2")) == Vector(
+        TournamentEvent.GameStart(3, GameId("gx"), Color.White, BotId("b1")),
+        TournamentEvent.GameStart(3, GameId("gx"), Color.Black, BotId("b2")),
       ))
     ,
     test("activeGameStarts returns nothing when the current round is absent"):
@@ -55,8 +55,8 @@ object GameActivationSpec extends ZIOSpecDefault:
       val events = GameActivation.activeGameStarts(t, games)
       assertTrue(
         events == Vector(
-          TournamentEvent.GameStart(1, GameId("g-on"), Color.White),
-          TournamentEvent.GameStart(1, GameId("g-on"), Color.Black),
+          TournamentEvent.GameStart(1, GameId("g-on"), Color.White, BotId("b1")),
+          TournamentEvent.GameStart(1, GameId("g-on"), Color.Black, BotId("b2")),
         ),
       )
   )

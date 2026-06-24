@@ -9,6 +9,7 @@ trait TournamentRepository:
   def save(tournament: Tournament): Task[Unit]
   def delete(id: TournamentId): Task[Unit]
   def listByStatus: Task[Map[TournamentStatus, Vector[Tournament]]]
+  def modifyIf(id: TournamentId)(f: Tournament => Option[Tournament]): Task[Option[Tournament]]
 
 object TournamentRepository:
   def get(id: TournamentId): ZIO[TournamentRepository, Throwable, Option[Tournament]] =
@@ -19,3 +20,5 @@ object TournamentRepository:
     ZIO.serviceWithZIO(_.delete(id))
   def listByStatus: ZIO[TournamentRepository, Throwable, Map[TournamentStatus, Vector[Tournament]]] =
     ZIO.serviceWithZIO(_.listByStatus)
+  def modifyIf(id: TournamentId)(f: Tournament => Option[Tournament]): ZIO[TournamentRepository, Throwable, Option[Tournament]] =
+    ZIO.serviceWithZIO(_.modifyIf(id)(f))

@@ -14,7 +14,7 @@ object JsonCodecsCoverageSpec extends ZIOSpecDefault:
       assertTrue(GameOutcome.Black.toJson == "\"black\"")
     },
     test("GameStart with Color.Black encoder") {
-      val event: TournamentEvent = TournamentEvent.GameStart(1, GameId("g1"), Color.Black)
+      val event: TournamentEvent = TournamentEvent.GameStart(1, GameId("g1"), Color.Black, BotId("b2"))
       val json = event.toJson
       assertTrue(json.contains("\"black\""))
     },

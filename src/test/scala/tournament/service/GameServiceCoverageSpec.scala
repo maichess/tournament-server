@@ -183,7 +183,7 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
       yield assertTrue(result.status == TournamentStatus.Finished)
       ).provide(testLayer)
     },
-    test("game end with non-existent tournament fails") {
+    test("game end with non-existent tournament silently skips tournament update") {
       (for
         gameRepo <- ZIO.service[GameRepository]
         gsvc <- ZIO.service[GameService]
@@ -198,11 +198,11 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
         _ <- gsvc.makeMove(GameId("orphan"), "f2f3", BotId("b1"))
         _ <- gsvc.makeMove(GameId("orphan"), "e7e5", BotId("b2"))
         _ <- gsvc.makeMove(GameId("orphan"), "g2g4", BotId("b1"))
-        result <- gsvc.makeMove(GameId("orphan"), "d8h4", BotId("b2")).exit
-      yield assertTrue(result.isFailure)
+        result <- gsvc.makeMove(GameId("orphan"), "d8h4", BotId("b2"))
+      yield assertTrue(result.status == GameStatus.Checkmate)
       ).provide(testLayer)
     },
-    test("game end with corrupted tournament round fails") {
+    test("game end with corrupted tournament round silently skips tournament update") {
       val form = CreateTournamentForm(
         name = "Corrupt", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
         rated = true, format = TournamentFormat.Swiss,
@@ -218,14 +218,13 @@ object GameServiceCoverageSpec extends ZIOSpecDefault:
         _ <- tsvc.join(t.id, bot2)
         started <- tsvc.start(t.id, director)
         gameId = started.rounds.head.pairings.head.matches.head.gameId
-        // Corrupt: set currentRound to 99, a round that doesn't exist
         _ <- tournamentRepo.save(started.copy(currentRound = 99))
         game <- gameRepo.get(gameId).map(_.get)
         _ <- gsvc.makeMove(gameId, "f2f3", game.white.id)
         _ <- gsvc.makeMove(gameId, "e7e5", game.black.id)
         _ <- gsvc.makeMove(gameId, "g2g4", game.white.id)
-        result <- gsvc.makeMove(gameId, "d8h4", game.black.id).exit
-      yield assertTrue(result.isFailure)
+        result <- gsvc.makeMove(gameId, "d8h4", game.black.id)
+      yield assertTrue(result.status == GameStatus.Checkmate)
       ).provide(testLayer)
     },
     test("finishing the second game of an already-decided pairing is a no-op") {

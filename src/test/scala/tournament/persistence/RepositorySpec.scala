@@ -58,6 +58,28 @@ object RepositorySpec extends ZIOSpecDefault:
           result <- TournamentRepository.listByStatus
         yield assertTrue(result(TournamentStatus.Created).nonEmpty)
       },
+      test("modifyIf applies and persists when the function returns Some") {
+        for
+          _ <- TournamentRepository.save(testTournament)
+          updated <- TournamentRepository.modifyIf(TournamentId("t1"))(t =>
+            Some(t.copy(status = TournamentStatus.Started)))
+          stored <- TournamentRepository.get(TournamentId("t1"))
+        yield assertTrue(
+          updated.exists(_.status == TournamentStatus.Started),
+          stored.exists(_.status == TournamentStatus.Started),
+        )
+      },
+      test("modifyIf is a no-op when the function returns None") {
+        for
+          _ <- TournamentRepository.save(testTournament)
+          result <- TournamentRepository.modifyIf(TournamentId("t1"))(_ => None)
+          stored <- TournamentRepository.get(TournamentId("t1"))
+        yield assertTrue(result.isEmpty, stored.exists(_.status == TournamentStatus.Created))
+      },
+      test("modifyIf returns None for a missing tournament") {
+        for result <- TournamentRepository.modifyIf(TournamentId("absent"))(t => Some(t))
+        yield assertTrue(result.isEmpty)
+      },
     ),
     suite("GameRepository companion")(
       test("save and get via companion") {

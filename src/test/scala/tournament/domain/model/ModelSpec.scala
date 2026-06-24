@@ -71,12 +71,12 @@ object ModelSpec extends ZIOSpecDefault:
         import tournament.domain.event.TournamentEvent
         val e1 = TournamentEvent.TournamentStarted
         val e2 = TournamentEvent.RoundStarted(1)
-        val e3 = TournamentEvent.GameStart(1, GameId("g1"), Color.White)
+        val e3 = TournamentEvent.GameStart(1, GameId("g1"), Color.White, BotId("b1"))
         val e4 = TournamentEvent.RoundFinished(1)
         val bot = BotRef(BotId("b"), "B")
         val e5 = TournamentEvent.TournamentFinished(bot)
         assertTrue(e2 == TournamentEvent.RoundStarted(1)) &&
-        assertTrue(e3 == TournamentEvent.GameStart(1, GameId("g1"), Color.White)) &&
+        assertTrue(e3 == TournamentEvent.GameStart(1, GameId("g1"), Color.White, BotId("b1"))) &&
         assertTrue(e4 == TournamentEvent.RoundFinished(1)) &&
         assertTrue(e5 == TournamentEvent.TournamentFinished(bot))
       },
