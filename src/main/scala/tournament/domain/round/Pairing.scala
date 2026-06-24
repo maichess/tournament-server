@@ -23,7 +23,7 @@ final case class Pairing(
           case GameOutcome.Draw  => GameOutcome.Draw
 
   def earlyWinner(matchesPerPairing: Int): Option[GameOutcome] =
-    val needed = (matchesPerPairing + 1) / 2
+    val needed = matchesPerPairing / 2 + 1
     val whiteWins = matches.count(outcomeForNominalWhite(_).contains(GameOutcome.White))
     val blackWins = matches.count(outcomeForNominalWhite(_).contains(GameOutcome.Black))
     if whiteWins >= needed then Some(GameOutcome.White)

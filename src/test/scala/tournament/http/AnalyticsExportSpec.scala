@@ -483,15 +483,15 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
     },
 
     test("export reports a still-ongoing game with a null winner") {
-      // best-of-2: a single win decides the pairing, finishing the 1-round
-      // tournament while the pairing's second game is still ongoing. That game
-      // appears in the export as terminationReason "ongoing" with winner null.
+      // best-of-3: winning 2 games decides the pairing (needed = 3/2+1 = 2),
+      // finishing the 1-round tournament while the third game is still ongoing.
+      // That game appears in the export as terminationReason "ongoing" with winner null.
       for
         tsvc <- ZIO.service[TournamentService]
         form  = CreateTournamentForm(
-          name = "BestOf2Export", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
+          name = "BestOf3Export", nbRounds = 1, clockLimit = 300, clockIncrement = 3,
           rated = true, format = TournamentFormat.Swiss,
-          startPosition = StartPosition.Standard, matchesPerPairing = 2, groupSize = None,
+          startPosition = StartPosition.Standard, matchesPerPairing = 3, groupSize = None,
         )
         t       <- tsvc.create(form, UserId("director1"))
         _       <- tsvc.join(t.id, testBot1)
@@ -499,13 +499,19 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
         started <- tsvc.start(t.id, UserId("director1"))
         pairing  = started.rounds.head.pairings.head
         g1       = pairing.matches(0).gameId
+        g2       = pairing.matches(1).gameId
         g1state <- GameRepository.get(g1).map(_.get)
+        g2state <- GameRepository.get(g2).map(_.get)
         gsvc    <- ZIO.service[GameService]
-        // Fool's mate on g1 alone decides the best-of-2 and finishes the tournament.
+        // Fool's mate on g1 and g2 gives 2 wins — the early-win threshold for best-of-3.
         _ <- gsvc.makeMove(g1, "f2f3", g1state.white.id)
         _ <- gsvc.makeMove(g1, "e7e5", g1state.black.id)
         _ <- gsvc.makeMove(g1, "g2g4", g1state.white.id)
         _ <- gsvc.makeMove(g1, "d8h4", g1state.black.id)
+        _ <- gsvc.makeMove(g2, "f2f3", g2state.white.id)
+        _ <- gsvc.makeMove(g2, "e7e5", g2state.black.id)
+        _ <- gsvc.makeMove(g2, "g2g4", g2state.white.id)
+        _ <- gsvc.makeMove(g2, "d8h4", g2state.black.id)
         response <- allRoutes.runZIO(
           Request.get(URL(Path.root / "api" / "tournament" / t.id.value / "analytics-export"))
         )
