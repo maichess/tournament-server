@@ -51,11 +51,38 @@ object ChessRulesCoverageSpec extends ZIOSpecDefault:
       test("UCI with invalid 'to' square") {
         assertTrue(parseUci("e2z4").isLeft)
       },
-      test("UCI with unknown promotion char") {
-        val result = parseUci("e7e8x")
-        assertTrue(result.isRight) && {
-          assertTrue(result.toOption.get.promotion.isEmpty)
-        }
+      test("UCI with unknown promotion char is rejected") {
+        assertTrue(parseUci("e7e8x").isLeft)
+      },
+      test("uppercase promotion char is accepted") {
+        val result = parseUci("e7e8Q")
+        assertTrue(result.toOption.flatMap(_.promotion).contains(PieceType.Queen))
+      },
+      test("each promotion piece parses") {
+        assertTrue(parseUci("e7e8q").toOption.flatMap(_.promotion).contains(PieceType.Queen)) &&
+        assertTrue(parseUci("e7e8r").toOption.flatMap(_.promotion).contains(PieceType.Rook)) &&
+        assertTrue(parseUci("e7e8b").toOption.flatMap(_.promotion).contains(PieceType.Bishop)) &&
+        assertTrue(parseUci("e7e8n").toOption.flatMap(_.promotion).contains(PieceType.Knight))
+      },
+    ),
+    suite("promotion legality")(
+      test("pawn reaching last rank requires a promotion piece") {
+        val board = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val noPromo = Move(Square(0, 6), Square(0, 7), None)
+        val promo   = Move(Square(0, 6), Square(0, 7), Some(PieceType.Queen))
+        assertTrue(!isLegalMove(board, noPromo)) &&
+        assertTrue(isLegalMove(board, promo))
+      },
+      test("promotion applied to non-last-rank move is illegal") {
+        val board = parseFen("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1").toOption.get
+        val bogus = Move(Square(4, 1), Square(4, 3), Some(PieceType.Queen))
+        assertTrue(!isLegalMove(board, bogus))
+      },
+      test("forward promotion produces the promoted piece in the FEN") {
+        val board  = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val move   = parseUci("a7a8q").toOption.get
+        val result = applyMove(board, move).map(boardToFen)
+        assertTrue(result.exists(_.startsWith("Q3k3/")))
       },
     ),
     suite("Board access")(
