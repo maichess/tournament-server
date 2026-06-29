@@ -106,7 +106,8 @@ object ChessRules:
       case _   => Left(s"Invalid promotion piece: $c")
 
   def isLegalMove(board: Board, move: Move): Boolean =
-    board.get(move.from) match
+    if !move.to.isValid then false
+    else board.get(move.from) match
       case None => false
       case Some(piece) =>
         if piece.color != board.turn then false
@@ -121,7 +122,13 @@ object ChessRules:
   private def isPromotionConsistent(piece: Piece, move: Move): Boolean =
     val lastRank = if piece.color == Color.White then 7 else 0
     val reachesLastRank = piece.pieceType == PieceType.Pawn && move.to.rank == lastRank
-    move.promotion.isDefined == reachesLastRank
+    val promotionPieceValid = move.promotion.forall(isValidPromotionPiece)
+    promotionPieceValid && (move.promotion.isDefined == reachesLastRank)
+
+  private def isValidPromotionPiece(pieceType: PieceType): Boolean =
+    pieceType match
+      case PieceType.Queen | PieceType.Rook | PieceType.Bishop | PieceType.Knight => true
+      case PieceType.King | PieceType.Pawn => false
 
   def applyMove(board: Board, move: Move): Either[String, Board] =
     if !isLegalMove(board, move) then Left("Illegal move")

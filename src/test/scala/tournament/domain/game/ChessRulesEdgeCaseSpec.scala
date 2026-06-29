@@ -37,6 +37,30 @@ object ChessRulesEdgeCaseSpec extends ZIOSpecDefault:
         assertTrue(parseUci("e2e").isLeft)
       },
     ),
+    suite("out-of-bounds target")(
+      test("applyMove rejects move with invalid to square instead of crashing") {
+        val board = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val move = Move(Square(0, 6), Square(0, 8), None) // a7 pawn push past last rank
+        assertTrue(!isLegalMove(board, move), applyMove(board, move).isLeft)
+      },
+    ),
+    suite("promotion piece validation")(
+      test("promotion to Queen is legal") {
+        val board = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val move = Move(Square(0, 6), Square(0, 7), Some(PieceType.Queen))
+        assertTrue(isLegalMove(board, move))
+      },
+      test("promotion to King is rejected") {
+        val board = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val move = Move(Square(0, 6), Square(0, 7), Some(PieceType.King))
+        assertTrue(!isLegalMove(board, move))
+      },
+      test("promotion to Pawn is rejected") {
+        val board = parseFen("4k3/P7/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        val move = Move(Square(0, 6), Square(0, 7), Some(PieceType.Pawn))
+        assertTrue(!isLegalMove(board, move))
+      },
+    ),
     suite("complex positions")(
       test("rook move along file blocked by piece") {
         val fen = "4k3/8/8/4p3/8/8/8/4K2R w K - 0 1"
