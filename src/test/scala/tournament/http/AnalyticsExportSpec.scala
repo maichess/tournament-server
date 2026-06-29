@@ -516,9 +516,17 @@ object AnalyticsExportSpec extends ZIOSpecDefault:
           Request.get(URL(Path.root / "api" / "tournament" / t.id.value / "analytics-export"))
         )
         body <- response.body.asString
+        json  = body.fromJson[Json].toOption.get
+        games = json.asObject.flatMap(_.get("games")).flatMap(_.asArray).getOrElse(Chunk.empty)
+        ongoingGames = games.filter: g =>
+          g.asObject.flatMap(_.get("terminationReason")).flatMap(_.asString).contains("ongoing")
+        // None (key omitted) or explicit Json.Null both mean "no winner"; a real
+        // winner would be Json.Str. Reject any present non-null winner.
+        ongoingWinners = ongoingGames.flatMap(_.asObject.flatMap(_.get("winner")))
       yield assertTrue(
         response.status == Status.Ok,
-        body.contains("\"terminationReason\":\"ongoing\""),
+        ongoingGames.size == 1,
+        ongoingWinners.forall(_ == Json.Null),
       )
     },
 

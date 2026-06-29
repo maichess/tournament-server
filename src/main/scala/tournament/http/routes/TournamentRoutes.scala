@@ -73,6 +73,8 @@ object TournamentRoutes:
       nbRounds <- ZIO.fromOption(params.get("nbRounds").flatMap(_.toIntOption)).mapError(_ => DomainError.BadRequest("missing or invalid nbRounds"))
       clockLimit <- ZIO.fromOption(params.get("clockLimit").flatMap(_.toIntOption)).mapError(_ => DomainError.BadRequest("missing or invalid clockLimit"))
       clockInc <- ZIO.fromOption(params.get("clockIncrement").flatMap(_.toIntOption)).mapError(_ => DomainError.BadRequest("missing or invalid clockIncrement"))
+      matchesPerPairing = params.get("matchesPerPairing").flatMap(_.toIntOption).getOrElse(1)
+      _ <- ZIO.fail(DomainError.BadRequest("matchesPerPairing must be at least 1")).when(matchesPerPairing < 1)
     yield CreateTournamentForm(
       name = name,
       nbRounds = nbRounds,
@@ -81,7 +83,7 @@ object TournamentRoutes:
       rated = params.get("rated").flatMap(_.toBooleanOption).getOrElse(true),
       format = params.get("format").flatMap(f => summon[JsonDecoder[TournamentFormat]].decodeJson(s"\"$f\"").toOption).getOrElse(TournamentFormat.Swiss),
       startPosition = StartPosition.fromString(params.getOrElse("startPosition", "standard")),
-      matchesPerPairing = params.get("matchesPerPairing").flatMap(_.toIntOption).getOrElse(1),
+      matchesPerPairing = matchesPerPairing,
       groupSize = params.get("groupSize").flatMap(_.toIntOption),
       opening = params.get("opening"),
       bots = params.get("bots"),
