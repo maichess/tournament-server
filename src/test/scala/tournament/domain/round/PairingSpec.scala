@@ -27,6 +27,10 @@ object PairingSpec extends ZIOSpecDefault:
         val p = mkPairing(1, Vector(Some(GameOutcome.Draw)))
         assertTrue(p.earlyWinner(1).contains(GameOutcome.Draw))
       },
+      test("no winner for non-positive matchesPerPairing") {
+        val p = mkPairing(0)
+        assertTrue(p.earlyWinner(0).isEmpty, !p.isComplete(0))
+      },
     ),
     suite("best-of-3")(
       test("white wins 2-0 early") {
