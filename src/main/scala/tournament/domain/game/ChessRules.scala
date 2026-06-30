@@ -92,29 +92,43 @@ object ChessRules:
     if uci.length < 4 || uci.length > 5 then Left(s"Invalid UCI: $uci")
     else
       for
-        from <- parseSquare(uci.substring(0, 2)).toRight(s"Invalid from square: ${uci.substring(0, 2)}")
-        to   <- parseSquare(uci.substring(2, 4)).toRight(s"Invalid to square: ${uci.substring(2, 4)}")
-      yield
-        val promo = if uci.length == 5 then uci(4) match
-          case 'q' => Some(PieceType.Queen)
-          case 'r' => Some(PieceType.Rook)
-          case 'b' => Some(PieceType.Bishop)
-          case 'n' => Some(PieceType.Knight)
-          case _   => None
-        else None
-        Move(from, to, promo)
+        from  <- parseSquare(uci.substring(0, 2)).toRight(s"Invalid from square: ${uci.substring(0, 2)}")
+        to    <- parseSquare(uci.substring(2, 4)).toRight(s"Invalid to square: ${uci.substring(2, 4)}")
+        promo <- if uci.length == 5 then parsePromotion(uci(4)).map(Some(_)) else Right(None)
+      yield Move(from, to, promo)
+
+  private def parsePromotion(c: Char): Either[String, PieceType] =
+    c.toLower match
+      case 'q' => Right(PieceType.Queen)
+      case 'r' => Right(PieceType.Rook)
+      case 'b' => Right(PieceType.Bishop)
+      case 'n' => Right(PieceType.Knight)
+      case _   => Left(s"Invalid promotion piece: $c")
 
   def isLegalMove(board: Board, move: Move): Boolean =
-    board.get(move.from) match
+    if !move.to.isValid then false
+    else board.get(move.from) match
       case None => false
       case Some(piece) =>
         if piece.color != board.turn then false
+        else if !isPromotionConsistent(piece, move) then false
         else
           val pseudoLegal = isPseudoLegalMove(board, piece, move)
           if !pseudoLegal then false
           else
             val after = applyMoveUnchecked(board, move)
             !isInCheck(after, board.turn)
+
+  private def isPromotionConsistent(piece: Piece, move: Move): Boolean =
+    val lastRank = if piece.color == Color.White then 7 else 0
+    val reachesLastRank = piece.pieceType == PieceType.Pawn && move.to.rank == lastRank
+    val promotionPieceValid = move.promotion.forall(isValidPromotionPiece)
+    promotionPieceValid && (move.promotion.isDefined == reachesLastRank)
+
+  private def isValidPromotionPiece(pieceType: PieceType): Boolean =
+    pieceType match
+      case PieceType.Queen | PieceType.Rook | PieceType.Bishop | PieceType.Knight => true
+      case PieceType.King | PieceType.Pawn => false
 
   def applyMove(board: Board, move: Move): Either[String, Board] =
     if !isLegalMove(board, move) then Left("Illegal move")
