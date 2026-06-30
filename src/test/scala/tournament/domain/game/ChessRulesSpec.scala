@@ -8,6 +8,8 @@ object ChessRulesSpec extends ZIOSpecDefault:
 
   private val startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+  private def m(uci: String): Move = parseUci(uci).toOption.get
+
   def spec = suite("ChessRules")(
     suite("parseFen")(
       test("parses standard starting position") {
@@ -535,6 +537,39 @@ object ChessRulesSpec extends ZIOSpecDefault:
         val move = Move(Square(4, 0), Square(5, 0), None) // Ke1-f1
         val after = applyMove(board, move).toOption.get
         assertTrue(after.halfmoveClock == 6)
+      },
+    ),
+    suite("threefold repetition")(
+      test("repetitionKey ignores move counters") {
+        val a = parseFen("4k3/8/8/8/8/8/8/4K3 w - - 5 10").toOption.get
+        val b = parseFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").toOption.get
+        assertTrue(repetitionKey(a) == repetitionKey(b))
+      },
+      test("repetitionKey distinguishes en passant and castling rights") {
+        val base = parseFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").toOption.get
+        val noCastle = parseFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1").toOption.get
+        assertTrue(repetitionKey(base) != repetitionKey(noCastle))
+      },
+      test("counts two occurrences after one knight cycle") {
+        val start = parseFen(startFen).toOption.get
+        val moves = Vector("g1f3", "g8f6", "f3g1", "f6g8").map(m)
+        assertTrue(repetitionCount(start, moves) == 2) &&
+        assertTrue(!isThreefoldRepetition(start, moves))
+      },
+      test("detects threefold after two knight cycles") {
+        val start = parseFen(startFen).toOption.get
+        val moves = Vector(
+          "g1f3", "g8f6", "f3g1", "f6g8",
+          "g1f3", "g8f6", "f3g1", "f6g8",
+        ).map(m)
+        assertTrue(repetitionCount(start, moves) == 3) &&
+        assertTrue(isThreefoldRepetition(start, moves))
+      },
+      test("irreversible pawn move resets the repetition window") {
+        val start = parseFen(startFen).toOption.get
+        val moves = Vector("g1f3", "g8f6", "f3g1", "f6g8", "e2e4").map(m)
+        assertTrue(repetitionCount(start, moves) == 1) &&
+        assertTrue(!isThreefoldRepetition(start, moves))
       },
     ),
   )

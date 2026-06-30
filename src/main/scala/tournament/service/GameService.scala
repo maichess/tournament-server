@@ -45,7 +45,11 @@ final class GameServiceLive(
       board <- ZIO.fromEither(ChessRules.parseFen(game.fen)).mapError(e => DomainError.BadRequest(e))
       newBoard <- ZIO.fromEither(ChessRules.applyMove(board, move)).mapError(e => DomainError.BadRequest(e))
       newFen = ChessRules.boardToFen(newBoard)
-      (newStatus, winner) = determineStatus(newBoard)
+      startBoard <- ZIO.fromEither(ChessRules.parseFen(game.startPosition.toFen)).mapError(e => DomainError.BadRequest(e))
+      playedMoves = (game.moves :+ uci).flatMap(m => ChessRules.parseUci(m).toOption)
+      (newStatus, winner) =
+        if ChessRules.isThreefoldRepetition(startBoard, playedMoves) then (GameStatus.Draw, None)
+        else determineStatus(newBoard)
       (newClock, flagged) = ClockRules.applyMove(game.clock, game.turn, game.lastMoveAt, now)
       (finalStatus, finalWinner) = if flagged then (GameStatus.Timeout, Some(game.turn.opposite))
         else (newStatus, winner)

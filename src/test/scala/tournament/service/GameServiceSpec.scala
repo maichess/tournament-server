@@ -106,6 +106,26 @@ object GameServiceSpec extends ZIOSpecDefault:
         assertTrue(game.winner.contains(Color.Black))
       ).provide(testLayer)
     },
+    test("threefold repetition draws the game") {
+      (for
+        gsvc <- ZIO.service[GameService]
+        (_, gameId) <- setupStartedTournament
+        _ <- gsvc.makeMove(gameId, "g1f3", bot1.id)
+        _ <- gsvc.makeMove(gameId, "g8f6", bot2.id)
+        _ <- gsvc.makeMove(gameId, "f3g1", bot1.id)
+        mid <- gsvc.makeMove(gameId, "f6g8", bot2.id)
+        _ <- gsvc.makeMove(gameId, "g1f3", bot1.id)
+        _ <- gsvc.makeMove(gameId, "g8f6", bot2.id)
+        _ <- gsvc.makeMove(gameId, "f3g1", bot1.id)
+        game <- gsvc.makeMove(gameId, "f6g8", bot2.id)
+      yield
+        // start position reached twice so far → still ongoing
+        assertTrue(mid.status == GameStatus.Ongoing) &&
+        // start position reached a third time → draw
+        assertTrue(game.status == GameStatus.Draw) &&
+        assertTrue(game.winner.isEmpty)
+      ).provide(testLayer)
+    },
     test("cannot move after game ends") {
       (for
         gsvc <- ZIO.service[GameService]
