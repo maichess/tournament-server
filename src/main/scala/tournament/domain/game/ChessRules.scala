@@ -148,6 +148,27 @@ object ChessRules:
   def isDraw(board: Board): Boolean =
     isStalemate(board) || board.halfmoveClock >= 100 || isInsufficientMaterial(board)
 
+  /** Position identity for repetition detection: the first four FEN fields
+    * (placement, side to move, castling rights, en passant), excluding the move
+    * counters, since two positions repeat regardless of how many moves elapsed. */
+  def repetitionKey(board: Board): String =
+    boardToFen(board).split(' ').take(4).mkString(" ")
+
+  /** How many times the position reached by replaying `moves` from `start` has
+    * occurred in that line, including the final occurrence. A value >= 3 means a
+    * threefold-repetition draw. Only positions since the last irreversible move
+    * (pawn move or capture) can repeat, so the scan is bounded by the final
+    * halfmove clock. The moves must be legal in sequence from `start`. */
+  def repetitionCount(start: Board, moves: Vector[Move]): Int =
+    val boards = moves.scanLeft(start)(applyMoveUnchecked)
+    val finalBoard = boards.last
+    val window = boards.takeRight(finalBoard.halfmoveClock + 1)
+    val finalKey = repetitionKey(finalBoard)
+    window.count(b => repetitionKey(b) == finalKey)
+
+  def isThreefoldRepetition(start: Board, moves: Vector[Move]): Boolean =
+    repetitionCount(start, moves) >= 3
+
   private def hasLegalMoves(board: Board): Boolean =
     allSquares.exists: sq =>
       board.get(sq).exists: piece =>
